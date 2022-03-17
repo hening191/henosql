@@ -430,12 +430,17 @@ public class NoSqlService<T> implements InitializingBean {
         }
         insertSql.append( String.join(",",sqlField) ).append(")VALUES(").append( String.join(",",params.stream().map(s -> "?").collect(Collectors.toList() ) )).append(")");
 
-        try{
-            getPreparedStatment(insertSql,params).execute();
+        log.info("SQL执行语句为：{}", insertSql);
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statment = connection.prepareStatement(insertSql.toString());){
+            for (int i = 0; i < params.size(); i++) {
+                statment.setString((i + 1), params.get(i));
+            }
+            log.info("SQL执行参数为：{}",  String.join(",", params));
+            statment.execute();
         } catch (SQLException e) {
             log.error( "执行sql出错：{}",insertSql );
-            log.error(e.getMessage(),e);
-            throw new SQLException();
+            throw e;
         }
     }
 

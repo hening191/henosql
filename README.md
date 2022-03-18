@@ -8,4 +8,4 @@
 2、读取查询使用的映射实体类包，启动时扫描所有配置包下的实体类；
 3、可配置映射实体类中的非查询字段；
 4、支持自定义连接池配置（13项，不配置的使用默认值。可配置属性：initialSize、maxActive、maxWait、timeBetweenEvictionRunsMillis、minEvictableIdleTimeMillis、removeAbandoned、removeAbandonedTimeout、logAbandoned、testWhileIdle、testOnBorrow、testOnReturn、poolPreparedStatements、maxPoolPreparedStatementPerConnectionSize、validationQuery）
-除数据库信息外，其他配置示意图
+除数据库信息外，其他配置示意图见issues

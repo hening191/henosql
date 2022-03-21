@@ -9,7 +9,6 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.io.File;
@@ -303,12 +302,12 @@ public class NoSqlService<T> implements InitializingBean {
             throw new SQLException();
         }
          */
-
         return list;
     }
 
     private <E> List<E> query(StringBuilder selectSql,List<String> params,Class<E> returnPoClz) throws  Exception {
         List<E> list = new ArrayList<>();
+        log.info("SQL执行语句为：{}", selectSql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {

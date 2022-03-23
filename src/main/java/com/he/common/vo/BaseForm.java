@@ -1,5 +1,7 @@
 package com.he.common.vo;
 
+import com.he.common.annotation.sql.SqlLimit;
+import com.he.common.annotation.sql.SqlStart;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -8,8 +10,10 @@ import lombok.ToString;
 @ToString(callSuper = true)
 public class BaseForm{
 
+    @SqlLimit
     Integer limit = 10;
     Integer pageNum = 1;
+    @SqlStart
     Integer start = 0;
 
     String sTime;

@@ -2,7 +2,10 @@ package com.he.service;
 
 import com.alibaba.druid.pool.DruidDataSourceFactory;
 import com.he.common.annotation.sql.*;
+import com.he.common.function.ClassFunction;
+import com.he.common.function.FieldFunction;
 import com.he.common.vo.BaseForm;
+import com.he.entity.Carrier;
 import com.he.util.StringUtil;
 import com.he.util.YamlUtils;
 import lombok.Setter;
@@ -11,21 +14,14 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
-import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
-import java.net.JarURLConnection;
-import java.net.URL;
-import java.net.URLDecoder;
 import java.sql.*;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 
 /**
@@ -58,13 +54,15 @@ public class NoSqlService<T> implements InitializingBean {
     private static String validationQuery = "select 1";
 
     private static String scanPoPackage;
-    private static String excludeFieldString = "transid,datetime,limit,pageNum,start";
+    private static String excludeFieldString = "transid,datetime,pageNum";
 
     private static DataSource dataSource ;
 
-    private Map<Class<?>,StringBuilder> queryInitSqlMap = new HashMap<>();      //查询字段
-    private Map<Class<?>,StringBuilder> queryInitOrderMap = new HashMap<>();    //查询排序
-    private Set<String> excludeField = new HashSet<>(Arrays.asList("transid","datetime","limit","pageNum","start"));  //这些字段不参与查询字段
+    private static Map<Class<?>,StringBuilder> queryInitSqlMap = new HashMap<>();      //查询字段
+    private static Map<Class<?>,StringBuilder> queryInitOrderMap = new HashMap<>();    //查询排序
+    private static Map<Class<?>,String> queryTable = new HashMap<>();                  //查询表名
+    private static Map<Class<?>,String> queryAlias = new HashMap<>();                  //表名别名
+    private static Set<String> excludeField = new HashSet<>(Arrays.asList("transid","datetime","pageNum"));  //这些字段不参与查询字段
 
     /**
      * 可继承重写，增加额外加载配置
@@ -165,14 +163,14 @@ public class NoSqlService<T> implements InitializingBean {
             return queryList(clt.newInstance());
         } catch (Exception e) {
             log.error("查询结果列表失败");
-            throw new Exception();
+            throw e;
         }
     }
 
     final public <T> List<T> queryList(T tp) throws Exception {
         Class clz =  tp.getClass();
         Field[] fields = clz.getDeclaredFields();
-        StringBuilder selectSql = new StringBuilder(queryInitSqlMap.get(clz));
+        StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         boolean whetherWhere = true;
         List<String> params = new ArrayList<>();
         for(Field field : fields){
@@ -183,7 +181,7 @@ public class NoSqlService<T> implements InitializingBean {
                         if (whetherWhere) selectSql.append(" ").append("where").append(" ");
                         else selectSql.append(" ").append("and").append(" ");
 
-                        appendSqlWhere(selectSql,field);
+                        appendSqlWhere(selectSql,field,"");
 
                         params.add( getFieldValue(field,tp) );
                         whetherWhere = false;
@@ -192,72 +190,31 @@ public class NoSqlService<T> implements InitializingBean {
             } catch (IllegalAccessException e) {
                 log.error( "获取sql参数出错" );
                 log.error(e.getMessage(),e);
-                throw new IllegalAccessException();
+                throw e;
             }
         }
-        selectSql.append(" ").append(queryInitOrderMap.get(clz) == null?"":queryInitOrderMap.get(clz));
+        selectSql.append(" ").append(queryInitOrderMap.get(clz) == null?"": " order by " + queryInitOrderMap.get(clz));
         return query(selectSql,params,clz);
     }
 
     final public <T> Map<String,Object> queryForm(Class<T> clz, BaseForm rv) throws Exception {
         //查询字段
-        StringBuilder selectSql = new StringBuilder(queryInitSqlMap.get(clz));
+        StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询数量
-        StringBuilder selectCount = new StringBuilder("select count(1) count from ").append(clz.getAnnotation(TableName.class).value());
+        StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
         //查询条件
         StringBuilder whereSql = new StringBuilder();
-
-        Field[] fields = getAllDeclaredField(rv.getClass());
-        boolean whetherWhere = true;
         List<String> params = new ArrayList<>();
-        Integer start = null;
-        Integer limit = null;
-        for(Field field : fields){
-            try {
-                if(!field.isAnnotationPresent(IgnoreSql.class)) {
-                    field.setAccessible(true);
-                    if (field.get(rv) != null && !"".equals(field.get(rv))) {
-                        if (!excludeField.contains(field.getName())) {
-                            whereSql.append(" ");
-                            if (whetherWhere) whereSql.append("where");
-                            else whereSql.append("and");
-                            whereSql.append(" ");
-                            if (field.isAnnotationPresent(Condition.class)) {
-                                //多字段查询，条件字段，非数据库实际字段，查询字段可能涉及多个数据库字段
-                                String[] conditions = field.getAnnotation(Condition.class).value();
-                                for (String condition : conditions) {
-                                    if (field.isAnnotationPresent(SqlFieldLike.class))
-                                        whereSql.append(condition).append(" like concat('%',?,'%')");
-                                    else whereSql.append(condition).append(" =? ");
-                                    params.add( getFieldValue(field,rv) );
-                                }
-                            } else { //单字段查询
-                                appendSqlWhere(whereSql,field);
-                                params.add( getFieldValue(field,rv) );
-                            }
-                            whetherWhere = false;
-                        } else {
-                            if ("start".equals(field.getName()) && field.get(rv) != null)
-                                start = (Integer) field.get(rv);
-                            if ("limit".equals(field.getName()) && field.get(rv) != null)
-                                limit = (Integer) field.get(rv);
-                        }
-                    }
-                }
-            } catch (IllegalAccessException e) {
-                log.error( "获取sql参数出错" );
-                log.error(e.getMessage(),e);
-                throw new IllegalAccessException();
-            }
-        }
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(rv,whereSql,params,limitMap);
+
         selectCount.append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
-        selectSql.append(whereSql).append( queryInitOrderMap.get(clz) == null?"":queryInitOrderMap.get(clz) );
-        if(limit != null){
-            selectSql.append(" ").append("limit").append(" ");
-            if (start != null) selectSql.append(start).append(",");
-            selectSql.append(limit);
-        }
+
+        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
+
         List<T> list = query(selectSql,params,clz);
         Map<String,Object> map = new HashMap<>();
         map.put("list",list);
@@ -267,7 +224,7 @@ public class NoSqlService<T> implements InitializingBean {
 
     private List<Integer> queryCount(StringBuilder selectSql,List<String> params) throws SQLException {
         List<Integer> list = new ArrayList<>();
-
+        log.info("SQL执行语句为：{}", selectSql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
@@ -288,21 +245,119 @@ public class NoSqlService<T> implements InitializingBean {
             log.error( "执行sql出错：{}",selectSql );
             throw e;
         }
-        /*
-        ResultSet rs = invokeSql(selectSql,params);
-        List<Integer> list = new ArrayList<>();
-        try {
-            if(rs == null)return null;
-            while (rs.next()) {
-                list.add(rs.getInt("count"));
-            }
-        }catch (SQLException e){
-            log.error("解析查询结果出错");
-            log.error("",e);
-            throw new SQLException();
-        }
-         */
+
         return list;
+    }
+
+    final public <P> List<Map<String,Object>> queryList(Class<?> clz,P p, Carrier... carriers) throws Exception {
+        StringBuilder selectSql = new StringBuilder("select ");
+        StringBuilder selectField = new StringBuilder();
+        StringBuilder fromSql = new StringBuilder();
+        List<String> params = new ArrayList<>();
+
+        fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
+        return query(selectSql,params,clz,selectField);
+    }
+
+    final public <P> Map<String,Object> queryForm(Class<?> clz,P p, Carrier... carriers) throws Exception {
+        StringBuilder selectSql = new StringBuilder("select ");
+        StringBuilder selectCount = new StringBuilder("select count(1) ");
+
+        StringBuilder selectField = new StringBuilder();
+        StringBuilder fromSql = new StringBuilder();
+        List<String> params = new ArrayList<>();
+
+        fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
+
+        List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
+        selectCount.append(selectField).append(" ").append(fromSql);
+        Integer count = queryCount(selectCount,params).get(0);
+        Map<String,Object> map = new HashMap<>();
+        map.put("list",list);
+        map.put("count",count);
+        return map;
+    }
+
+    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<String> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+        //查询字段
+        selectField.append(queryInitSqlMap.get(clz));
+        fromSql.append("from").append(" ").append(queryTable.get(clz));
+        StringBuilder orderBuilder = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        for(int i = 0;i < carriers.length; i++){
+            selectField.append(",").append(queryInitSqlMap.get( carriers[i].getRightTable() ));
+            fromSql.append(" left join ").append( queryTable.get(carriers[i].getRightTable()) )
+                    .append(" on ").append( queryAlias.get( carriers[i].getLeftTable())).append(".").append(carriers[i].getLeftKey())
+                    .append(" = ").append( queryAlias.get( carriers[i].getRightTable()) ).append(".").append(carriers[i].getRightKey());
+            orderBuilder.append( queryInitOrderMap.get(carriers[i].getRightTable())==null?"" : "," + queryInitOrderMap.get(carriers[i].getRightTable()) );
+        }
+        selectSql.append(selectField).append(" ").append(fromSql);
+        StringBuilder whereSql = new StringBuilder();
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(p,whereSql,params,limitMap);
+        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
+    }
+
+    private void fitSelectSql(StringBuilder selectSql,StringBuilder whereSql,Map<String,Integer> limitMap,StringBuilder orderBuilder){
+        selectSql.append(whereSql).append( StringUtil.isEmpty( orderBuilder.toString())?"":" order by " + orderBuilder );
+        if(limitMap.get("limit") != null){
+            selectSql.append(" ").append("limit").append(" ");
+            if (limitMap.get("start") != null) selectSql.append(limitMap.get("start")).append(",");
+            selectSql.append(limitMap.get("limit"));
+        }
+    }
+
+    private <P> void matchingParams(P p,StringBuilder whereSql,List<String> params,Map<String,Integer> limitMap) throws IllegalAccessException {
+        boolean whetherWhere = true;
+        Field[] fields = FieldFunction.getAllDeclaredField(p.getClass());
+        for(Field field : fields){
+            try {
+                if(!field.isAnnotationPresent(IgnoreSql.class)) {
+                    field.setAccessible(true);
+                    if (field.get(p) != null && !"".equals(field.get(p))) {
+                        if (!excludeField.contains(field.getName())) {
+                            if(field.isAnnotationPresent(SqlStart.class)){
+                                limitMap.put("start",(Integer) field.get(p));
+                            }else if(field.isAnnotationPresent(SqlLimit.class)) {
+                                limitMap.put("limit",(Integer) field.get(p));
+                            }else {
+                                String tableAlias = "";
+                                if(field.isAnnotationPresent(ClassForTable.class)) {
+                                    Class<?> fieldClass = field.getAnnotation(ClassForTable.class).value();
+                                    if (fieldClass.isAnnotationPresent(Alias.class)) {
+                                        if (!StringUtil.isEmpty(fieldClass.getAnnotation(Alias.class).value())) {
+                                            tableAlias = fieldClass.getAnnotation(Alias.class).value() + ".";
+                                        }
+                                    }
+                                }
+                                whereSql.append(" ");
+                                if (whetherWhere) whereSql.append("where");
+                                else whereSql.append("and");
+                                whereSql.append(" ");
+                                if (field.isAnnotationPresent(Condition.class)) {
+                                    //多字段查询，条件字段，非数据库实际字段，查询字段可能涉及多个数据库字段
+                                    String[] conditions = field.getAnnotation(Condition.class).value();
+                                    for (String condition : conditions) {
+                                        if (field.isAnnotationPresent(SqlFieldLike.class))
+                                            whereSql.append(tableAlias + condition).append(" like concat('%',?,'%')");
+                                        else whereSql.append(tableAlias + condition).append(" =? ");
+                                        params.add(getFieldValue(field, p));
+                                    }
+                                } else { //单字段查询
+                                    appendSqlWhere(whereSql, field,tableAlias);
+                                    params.add(getFieldValue(field, p));
+                                }
+                                whetherWhere = false;
+                            }
+                        }
+                    }
+                }
+            } catch (IllegalAccessException e) {
+                log.error( "获取sql参数出错" );
+                log.error(e.getMessage(),e);
+                throw e;
+            }
+        }
     }
 
     private <E> List<E> query(StringBuilder selectSql,List<String> params,Class<E> returnPoClz) throws  Exception {
@@ -329,22 +384,38 @@ public class NoSqlService<T> implements InitializingBean {
             throw e;
         }
 
-        /*
-        ResultSet rs = invokeSql(selectSql,params);
-        try {
-            if(rs == null)return null;
-            while (rs.next()) {
-                E t = packageEntity(rs,returnPoClz);
-                list.add(t);
+        log.info("获得查询结果数量:{}",list.size());
+        return list;
+    }
+
+    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<String> params,Class<E> returnPoClz,StringBuilder selectField) throws  Exception {
+        List<Map<String,Object>> list = new ArrayList<>();
+        log.info("SQL执行语句为：{}", selectSql);
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
+            for (int i = 0; i < params.size(); i++) {
+                statment.setString((i + 1), params.get(i));
             }
-        }catch (SQLException | InstantiationException | IllegalAccessException e){
-            log.error("解析查询结果出错");
-            log.error("",e);
+            log.info("SQL执行参数为：{}", String.join(",", params));
+            String[] selectFieldArgs = selectField.toString().replaceAll(" +","").split(",");
+            try(ResultSet rs = statment.executeQuery()){
+                if(rs == null)return null;
+                while (rs.next()) {
+                    Map<String,Object> map = new HashMap<>();
+                    for(String valueField : selectFieldArgs){
+                        if(!StringUtil.isEmpty(valueField))map.put(valueField,rs.getObject(valueField));
+                    }
+                    list.add(map);
+                }
+            }catch (SQLException e ){
+                log.error("解析查询结果出错");
+                throw e;
+            }
+        } catch (SQLException e) {
+            log.error( "执行sql出错：{}",selectSql );
             throw e;
         }
-        */
         log.info("获得查询结果数量:{}",list.size());
-
         return list;
     }
 
@@ -358,9 +429,10 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
-    private void appendSqlWhere(StringBuilder whereSql,Field field){
+    private void appendSqlWhere(StringBuilder whereSql,Field field,String tableAlias){
         //根据注解情况，获取实际查询字段
         StringBuilder selectField = whetherGetAnnotationValueAsSqlField(field);
+        selectField = new StringBuilder(tableAlias).append(selectField);
         if (field.isAnnotationPresent(SqlDateFormat.class))selectField = new StringBuilder("date_format(").append(selectField).append(",'%Y%m%d%H%i%s')");
         //多种查询条件
         if (field.isAnnotationPresent(SqlFieldLike.class))
@@ -424,7 +496,7 @@ public class NoSqlService<T> implements InitializingBean {
             } catch (IllegalAccessException e) {
                 log.error( "获取sql参数出错" );
                 log.error(e.getMessage(),e);
-                throw new IllegalAccessException();
+                throw e;
             }
         }
         insertSql.append( String.join(",",sqlField) ).append(")VALUES(").append( String.join(",",params.stream().map(s -> "?").collect(Collectors.toList() ) )).append(")");
@@ -472,7 +544,7 @@ public class NoSqlService<T> implements InitializingBean {
             } catch (IllegalAccessException e) {
                 log.error( "获取sql参数出错");
                 log.error(e.getMessage(),e);
-                throw new IllegalAccessException();
+                throw e;
             }
         }
         boolean whetherComma = false;
@@ -517,7 +589,7 @@ public class NoSqlService<T> implements InitializingBean {
                     } catch (IllegalAccessException e) {
                         log.error("获取sql参数出错");
                         log.error(e.getMessage(), e);
-                        throw new IllegalAccessException();
+                        throw e;
                     }
                     break;
                 }
@@ -639,34 +711,46 @@ public class NoSqlService<T> implements InitializingBean {
         if(StringUtil.isEmpty(scanPoPackage))throw new Exception();  //TODO 此处需要自定义Exception抛出异常”未扫描到数据表映射类“
         Set<Class<?>> classes = new LinkedHashSet<>();
         for(String packagePath : scanPoPackage.split(",")) {
-            classes.addAll(getClasses(packagePath));
+            classes.addAll(ClassFunction.getClasses(packagePath));
         }
         log.info("扫描的sql映射类共{}个",classes.size());
         for(Class<?> c:classes){
             if(c.isAnnotationPresent(TableName.class)) {
                 String tableName = c.getAnnotation(TableName.class).value();
+                String tableAlias = "";
+                if(c.isAnnotationPresent(Alias.class)) {
+                    if( !StringUtil.isEmpty(c.getAnnotation(Alias.class).value()) ) {
+                        tableAlias = c.getAnnotation(Alias.class).value();
+                        tableName = tableName+" as "+c.getAnnotation(Alias.class).value();
+                        queryAlias.put(c,tableAlias);
+                    }
+                }
+                queryTable.put(c,tableName);
                 Field[] fields = c.getDeclaredFields();
-                StringBuilder selectSql = new StringBuilder("select ");
+                StringBuilder selectSql = new StringBuilder();
                 TreeMap<Integer,String> selectOrderMap = new TreeMap<>();
                 for (Field field : fields) {
+                    String fieldName = tableAlias + "." + field.getName();
                     if(!field.isAnnotationPresent(IgnoreSql.class) && !field.isAnnotationPresent(IgnoreSelectField.class)) {
-                        selectSql.append(field.getName()).append(",");
+                        selectSql.append(fieldName).append(",");
                         if (field.isAnnotationPresent(OrderByAsc.class)) {
-                            selectOrderMap.put(field.getAnnotation(OrderByAsc.class).value(), field.getName() + " asc");
+                            selectOrderMap.put(field.getAnnotation(OrderByAsc.class).value(), fieldName + " asc");
                         }
                         if (field.isAnnotationPresent(OrderByDesc.class)) {
-                            selectOrderMap.put(field.getAnnotation(OrderByDesc.class).value(), field.getName() + " desc");
+                            selectOrderMap.put(field.getAnnotation(OrderByDesc.class).value(), fieldName + " desc");
                         }
                     }
                 }
-                selectSql.deleteCharAt(selectSql.length() - 1).append(" ").append("from").append(" ").append(tableName);
+                selectSql.deleteCharAt(selectSql.length() - 1).append(" ");
                 if(selectOrderMap.size() > 0){
                     StringBuilder orderBuilder = new StringBuilder();
                     boolean hasOrder = false;
-                    for(Integer i : selectOrderMap.keySet()){
-                        if(!hasOrder)orderBuilder.append(" order by ");
-                        else orderBuilder.append(",");
+                    List<Integer> orderKeyList = new ArrayList<>(selectOrderMap.keySet());
+                    Collections.sort(orderKeyList);
+                    for(Integer i : orderKeyList){
+                        if(hasOrder)orderBuilder.append(",");                  //orderBuilder.append(" order by ");
                         orderBuilder.append(selectOrderMap.get(i));
+                        hasOrder = true;
                     }
                     queryInitOrderMap.put(c , orderBuilder);
                 }
@@ -675,114 +759,5 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
-    private static Field[] getAllDeclaredField(Class<?> clz){
-        Field[] me = clz.getDeclaredFields();
-        if((clz = clz.getSuperclass())!=null){
-            Field[] sup = getAllDeclaredField(clz);
-            Field[] fields = new Field[me.length + sup.length];
-            System.arraycopy(me, 0, fields, 0, me.length);
-            System.arraycopy(sup, 0, fields, me.length, sup.length);
-            return fields;
-        }else{
-            return me;
-        }
-    }
-
-    private static Set<String> getAllDeclaredFieldName(Class<?> clz){
-        return Arrays.asList( getAllDeclaredField(clz) ).stream().map(Field::getName).collect(Collectors.toSet());
-    }
-
-    //class方式获取类
-    private static Set<Class<?>> getClasses(String pack) throws Exception {
-        Set<Class<?>> classes = new LinkedHashSet<Class<?>>();
-        // 是否循环迭代
-        boolean recursive = true;
-        String packageName = pack;
-        String packageDirName = packageName.replace('.', '/');
-        Enumeration<URL> dirs;
-        try {
-            dirs = Thread.currentThread().getContextClassLoader().getResources(packageDirName);
-            while (dirs.hasMoreElements()) {
-                URL url = dirs.nextElement();
-                String protocol = url.getProtocol();
-                if ("file".equals(protocol)) {
-                    // 获取包的物理路径
-                    String filePath = URLDecoder.decode(url.getFile(), "UTF-8");
-                    // 以文件的方式扫描整个包下的文件 并添加到集合中
-                    findClassesInPackageByFile(packageName, filePath, recursive, classes);
-                } else if ("jar".equals(protocol)) {
-                    System.out.println("jar类型的扫描");
-                    JarFile jar;
-                    try {
-                        jar = ((JarURLConnection) url.openConnection()).getJarFile();
-                        Enumeration<JarEntry> entries = jar.entries();
-                        findClassesInPackageByJar(packageName, entries, packageDirName, recursive, classes);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return classes;
-    }
-
-    //文件方式获取类
-    private static void findClassesInPackageByFile(String packageName, String packagePath, final boolean recursive, Set<Class<?>> classes) {
-        File dir = new File(packagePath);
-        if (!dir.exists() || !dir.isDirectory()) {
-            return;
-        }
-        File[] dirfiles = dir.listFiles(new FileFilter() {
-            @Override
-            public boolean accept(File file) {
-                return (recursive && file.isDirectory()) || (file.getName().endsWith(".class"));
-            }
-        });
-        for (File file : dirfiles) {
-            if (file.isDirectory()) {
-                findClassesInPackageByFile(packageName + "." + file.getName(), file.getAbsolutePath(), recursive, classes);
-            } else {
-                String className = file.getName().substring(0, file.getName().length() - 6);
-                try {
-                    // 使用forName获取class时会触发static方法，所以使用classLoader的获取
-                    classes.add(Thread.currentThread().getContextClassLoader().loadClass(packageName + '.' + className));
-                } catch (ClassNotFoundException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private static void findClassesInPackageByJar(String packageName, Enumeration<JarEntry> entries, String packageDirName, final boolean recursive, Set<Class<?>> classes) {
-        while (entries.hasMoreElements()) {
-            // 获取jar里的一个实体 可以是目录 和一些jar包里的其他文件 如META-INF等文件
-            JarEntry entry = entries.nextElement();
-            String name = entry.getName();
-            if (name.charAt(0) == '/') {
-                name = name.substring(1);
-            }
-            // 如果前半部分和定义的包名相同
-            if (name.startsWith(packageDirName)) {
-                int idx = name.lastIndexOf('/');
-                // 如果以"/"结尾 说明是一个包
-                if (idx != -1) {
-                    packageName = name.substring(0, idx).replace('/', '.');
-                }
-                if ((idx != -1) || recursive) {
-                    if (name.endsWith(".class") && !entry.isDirectory()) {
-                        // 去掉后面的".class" 截取出类名
-                        String className = name.substring(packageName.length() + 1, name.length() - 6);
-                        try {
-                            classes.add(Class.forName(packageName + '.' + className));
-                        } catch (ClassNotFoundException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-        }
-    }
 
 }

@@ -723,6 +723,7 @@ public class NoSqlService<T> implements InitializingBean {
                         tableAlias = c.getAnnotation(Alias.class).value();
                         tableName = tableName+" as "+c.getAnnotation(Alias.class).value();
                         queryAlias.put(c,tableAlias);
+                        tableAlias += tableAlias + ".";
                     }
                 }
                 queryTable.put(c,tableName);
@@ -730,7 +731,7 @@ public class NoSqlService<T> implements InitializingBean {
                 StringBuilder selectSql = new StringBuilder();
                 TreeMap<Integer,String> selectOrderMap = new TreeMap<>();
                 for (Field field : fields) {
-                    String fieldName = tableAlias + "." + field.getName();
+                    String fieldName = tableAlias + field.getName();
                     if(!field.isAnnotationPresent(IgnoreSql.class) && !field.isAnnotationPresent(IgnoreSelectField.class)) {
                         selectSql.append(fieldName).append(",");
                         if (field.isAnnotationPresent(OrderByAsc.class)) {

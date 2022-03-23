@@ -723,7 +723,7 @@ public class NoSqlService<T> implements InitializingBean {
                         tableAlias = c.getAnnotation(Alias.class).value();
                         tableName = tableName+" as "+c.getAnnotation(Alias.class).value();
                         queryAlias.put(c,tableAlias);
-                        tableAlias += tableAlias + ".";
+                        tableAlias += ".";
                     }
                 }
                 queryTable.put(c,tableName);

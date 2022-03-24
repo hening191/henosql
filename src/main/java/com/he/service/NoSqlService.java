@@ -708,7 +708,10 @@ public class NoSqlService<T> implements InitializingBean {
         if(!StringUtil.isEmpty(excludeFieldString))excludeField = new HashSet<>(Arrays.asList(excludeFieldString.split(",")));
         log.info("非查询字段有{}个，分别是:{}",excludeField.size(),excludeFieldString);
         //初始化查询sql语句
-        if(StringUtil.isEmpty(scanPoPackage))throw new Exception();  //TODO 此处需要自定义Exception抛出异常”未扫描到数据表映射类“
+        if(StringUtil.isEmpty(scanPoPackage)){
+            log.error("未扫描到数据表映射类");
+            System.exit(0);
+        }
         Set<Class<?>> classes = new LinkedHashSet<>();
         for(String packagePath : scanPoPackage.split(",")) {
             classes.addAll(ClassFunction.getClasses(packagePath));
@@ -722,6 +725,10 @@ public class NoSqlService<T> implements InitializingBean {
                     if( !StringUtil.isEmpty(c.getAnnotation(Alias.class).value()) ) {
                         tableAlias = c.getAnnotation(Alias.class).value();
                         tableName = tableName+" as "+c.getAnnotation(Alias.class).value();
+                        if(queryAlias.get(c) != null){
+                            log.error("映射表类中定义的别名（Alias）重复！");
+                            System.exit(0);
+                        }
                         queryAlias.put(c,tableAlias);
                         tableAlias += ".";
                     }

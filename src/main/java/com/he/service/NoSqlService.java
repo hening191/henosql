@@ -209,7 +209,7 @@ public class NoSqlService<T> implements InitializingBean {
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(rv,whereSql,params,limitMap);
 
-        selectCount.append(whereSql);
+        selectCount.append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
 
         StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );

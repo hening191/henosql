@@ -261,7 +261,7 @@ public class NoSqlService<T> implements InitializingBean {
 
     final public <P> Map<String,Object> queryForm(Class<?> clz,P p, Carrier... carriers) throws Exception {
         StringBuilder selectSql = new StringBuilder("select ");
-        StringBuilder selectCount = new StringBuilder("select count(1) ");
+        StringBuilder selectCount = new StringBuilder("select count(1) count ");
 
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
@@ -270,7 +270,7 @@ public class NoSqlService<T> implements InitializingBean {
         fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
 
         List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
-        selectCount.append(selectField).append(" ").append(fromSql);
+        selectCount.append(" ").append(fromSql);
         Integer count = queryCount(selectCount,params).get(0);
         Map<String,Object> map = new HashMap<>();
         map.put("list",list);

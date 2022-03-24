@@ -13,5 +13,5 @@
 4、支持自定义连接池配置（13项，不配置的使用默认值。可配置属性：initialSize、maxActive、maxWait、timeBetweenEvictionRunsMillis、minEvictableIdleTimeMillis、removeAbandoned、removeAbandonedTimeout、logAbandoned、testWhileIdle、testOnBorrow、testOnReturn、poolPreparedStatements、maxPoolPreparedStatementPerConnectionSize、validationQuery）
 除数据库信息外，其他配置示意图见issues
 
-<font size =2 >version1.6.0.1</font>
+<font size=5>version1.6.0.1</font>
 增加了查询sql语句日志

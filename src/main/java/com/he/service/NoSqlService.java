@@ -725,7 +725,7 @@ public class NoSqlService<T> implements InitializingBean {
                     if( !StringUtil.isEmpty(c.getAnnotation(Alias.class).value()) ) {
                         tableAlias = c.getAnnotation(Alias.class).value();
                         tableName = tableName+" as "+c.getAnnotation(Alias.class).value();
-                        if(queryAlias.get(c) != null){
+                        if(queryAlias.containsValue(tableAlias)){
                             log.error("映射表类中定义的别名（Alias）重复！");
                             System.exit(0);
                         }

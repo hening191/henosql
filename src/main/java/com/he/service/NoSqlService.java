@@ -337,15 +337,17 @@ public class NoSqlService<T> implements InitializingBean {
                                 if (field.isAnnotationPresent(Condition.class)) {
                                     //多字段查询，条件字段，非数据库实际字段，查询字段可能涉及多个数据库字段
                                     String[] conditions = field.getAnnotation(Condition.class).value();
-                                    boolean conditionAnd = false;
+                                    boolean conditionOr = false;
+                                    whereSql.append("(");
                                     for (String condition : conditions) {
-                                        if(conditionAnd)whereSql.append(" and ");
+                                        if(conditionOr)whereSql.append(" or ");
                                         if (field.isAnnotationPresent(SqlFieldLike.class))
                                             whereSql.append(tableAlias + condition).append(" like concat('%',?,'%')");
                                         else whereSql.append(tableAlias + condition).append(" =? ");
                                         params.add(getFieldValue(field, p));
-                                        conditionAnd = true;
+                                        conditionOr = true;
                                     }
+                                    whereSql.append(")");
                                 } else { //单字段查询
                                     appendSqlWhere(whereSql, field,tableAlias);
                                     params.add(getFieldValue(field, p));

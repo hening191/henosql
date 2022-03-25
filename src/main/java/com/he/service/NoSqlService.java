@@ -265,12 +265,13 @@ public class NoSqlService<T> implements InitializingBean {
 
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
+        StringBuilder whereSql = new StringBuilder();
         List<String> params = new ArrayList<>();
 
         fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
 
         List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
-        selectCount.append(" ").append(fromSql);
+        selectCount.append(" ").append(fromSql).append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
         Map<String,Object> map = new HashMap<>();
         map.put("list",list);
@@ -279,6 +280,10 @@ public class NoSqlService<T> implements InitializingBean {
     }
 
     private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<String> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+        fitParams(selectSql,selectField,fromSql,new StringBuilder(),params,clz,p,carriers);
+    }
+
+    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<String> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         //查询字段
         selectField.append(queryInitSqlMap.get(clz));
         fromSql.append("from").append(" ").append(queryTable.get(clz));
@@ -291,7 +296,6 @@ public class NoSqlService<T> implements InitializingBean {
             orderBuilder.append( queryInitOrderMap.get(carriers[i].getRightTable())==null?"" : "," + queryInitOrderMap.get(carriers[i].getRightTable()) );
         }
         selectSql.append(selectField).append(" ").append(fromSql);
-        StringBuilder whereSql = new StringBuilder();
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);

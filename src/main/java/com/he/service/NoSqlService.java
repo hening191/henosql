@@ -293,7 +293,10 @@ public class NoSqlService<T> implements InitializingBean {
             fromSql.append(" left join ").append( queryTable.get(carriers[i].getRightTable()) )
                     .append(" on ").append( queryAlias.get( carriers[i].getLeftTable())).append(".").append(carriers[i].getLeftKey())
                     .append(" = ").append( queryAlias.get( carriers[i].getRightTable()) ).append(".").append(carriers[i].getRightKey());
-            orderBuilder.append( queryInitOrderMap.get(carriers[i].getRightTable())==null?"" : "," + queryInitOrderMap.get(carriers[i].getRightTable()) );
+            if( queryInitOrderMap.get(carriers[i].getRightTable())!=null ) {
+                if( !StringUtil.isEmpty(orderBuilder.toString() ) ) orderBuilder.append(",");
+                orderBuilder.append( queryInitOrderMap.get(carriers[i].getRightTable()) );
+            }
         }
         selectSql.append(selectField).append(" ").append(fromSql);
         Map<String,Integer> limitMap = new HashMap<>();

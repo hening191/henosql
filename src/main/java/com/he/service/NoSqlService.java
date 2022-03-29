@@ -222,6 +222,36 @@ public class NoSqlService<T> implements InitializingBean {
         return map;
     }
 
+    final public <T> List<T> queryFormList(Class<T> clz, BaseForm rv) throws Exception {
+        //查询字段
+        StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
+        //查询条件
+        StringBuilder whereSql = new StringBuilder();
+        List<String> params = new ArrayList<>();
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(rv,whereSql,params,limitMap);
+
+        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
+        return query(selectSql,params,clz);
+    }
+
+    final public <T> Integer queryFormCount(Class<T> clz, BaseForm rv) throws Exception {
+        //查询数量
+        StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
+        //查询条件
+        StringBuilder whereSql = new StringBuilder();
+        List<String> params = new ArrayList<>();
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(rv,whereSql,params,limitMap);
+
+        selectCount.append(" ").append(whereSql);
+
+        return queryCount(selectCount,params).get(0);
+    }
+
     private List<Integer> queryCount(StringBuilder selectSql,List<String> params) throws SQLException {
         List<Integer> list = new ArrayList<>();
         log.info("SQL执行语句为：{}", selectSql);
@@ -268,7 +298,7 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder whereSql = new StringBuilder();
         List<String> params = new ArrayList<>();
 
-        fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
+        fitParams(selectSql,selectField,fromSql,whereSql,params,clz,p,carriers);
 
         List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
         selectCount.append(" ").append(fromSql).append(" ").append(whereSql);

@@ -32,7 +32,6 @@ public class ClassFunction {
                     // 以文件的方式扫描整个包下的文件 并添加到集合中
                     findClassesInPackageByFile(packageName, filePath, recursive, classes);
                 } else if ("jar".equals(protocol)) {
-                    System.out.println("jar类型的扫描");
                     JarFile jar;
                     try {
                         jar = ((JarURLConnection) url.openConnection()).getJarFile();

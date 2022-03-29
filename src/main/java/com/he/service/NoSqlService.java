@@ -474,7 +474,7 @@ public class NoSqlService<T> implements InitializingBean {
                 } else if (type.getTypeName().equals(Byte.class.getTypeName())) {
                     field.set(t, rs.getByte(field.getName()));
                 } else if (type.getTypeName().equals(java.util.Date.class.getTypeName())) {
-                    field.set(t, rs.getDate(field.getName()));
+                    field.set(t, rs.getTimestamp(field.getName()));
                 } else if (type.getTypeName().equals(Boolean.class.getTypeName())) {
                     field.set(t, rs.getBoolean(field.getName()));
                 } else if (type.getTypeName().equals(BigDecimal.class.getTypeName())) {

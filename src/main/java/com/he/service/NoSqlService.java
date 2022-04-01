@@ -197,7 +197,7 @@ public class NoSqlService<T> implements InitializingBean {
         return query(selectSql,params,clz);
     }
 
-    final public <T> Map<String,Object> queryForm(Class<T> clz, BaseForm rv) throws Exception {
+    final public <T,P> Map<String,Object> queryForm(Class<T> clz, P p) throws Exception {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询数量
@@ -207,7 +207,7 @@ public class NoSqlService<T> implements InitializingBean {
         List<String> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
-        matchingParams(rv,whereSql,params,limitMap);
+        matchingParams(p,whereSql,params,limitMap);
 
         selectCount.append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
@@ -222,7 +222,7 @@ public class NoSqlService<T> implements InitializingBean {
         return map;
     }
 
-    final public <T> List<T> queryFormList(Class<T> clz, BaseForm rv) throws Exception {
+    final public <T,P> List<T> queryFormList(Class<T> clz, P p) throws Exception {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询条件
@@ -230,11 +230,19 @@ public class NoSqlService<T> implements InitializingBean {
         List<String> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
-        matchingParams(rv,whereSql,params,limitMap);
+        matchingParams(p,whereSql,params,limitMap);
 
         StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
         fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
         return query(selectSql,params,clz);
+    }
+
+    final public <T> Map<String,Object> queryForm(T t) throws Exception {
+        return queryForm(t.getClass(),t);
+    }
+
+    final public <T> List<T> queryFormList(T t) throws Exception {
+        return (List<T>) queryFormList(t.getClass(),t);
     }
 
     final public <T> Integer queryFormCount(Class<T> clz, BaseForm rv) throws Exception {

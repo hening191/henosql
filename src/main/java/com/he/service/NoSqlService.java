@@ -172,7 +172,7 @@ public class NoSqlService<T> implements InitializingBean {
         Field[] fields = clz.getDeclaredFields();
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         boolean whetherWhere = true;
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
         for(Field field : fields){
             try {
                 if(!field.isAnnotationPresent(IgnoreSql.class)) {
@@ -204,7 +204,7 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
         //查询条件
         StringBuilder whereSql = new StringBuilder();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
@@ -213,7 +213,7 @@ public class NoSqlService<T> implements InitializingBean {
         Integer count = queryCount(selectCount,params).get(0);
 
         StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
+        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder,params);
 
         List<T> list = query(selectSql,params,clz);
         Map<String,Object> map = new HashMap<>();
@@ -227,13 +227,13 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询条件
         StringBuilder whereSql = new StringBuilder();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
 
         StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
+        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder,params);
         return query(selectSql,params,clz);
     }
 
@@ -250,7 +250,7 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
         //查询条件
         StringBuilder whereSql = new StringBuilder();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(rv,whereSql,params,limitMap);
@@ -260,15 +260,15 @@ public class NoSqlService<T> implements InitializingBean {
         return queryCount(selectCount,params).get(0);
     }
 
-    private List<Integer> queryCount(StringBuilder selectSql,List<String> params) throws SQLException {
+    private List<Integer> queryCount(StringBuilder selectSql,List<Object> params) throws SQLException {
         List<Integer> list = new ArrayList<>();
         log.info("SQL执行语句为：{}", selectSql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
-                statment.setString((i + 1), params.get(i));
+                statment.setObject((i + 1), params.get(i));
             }
-            log.info("SQL执行参数为：{}", String.join(",", params));
+            log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
                 while (rs.next()) {
@@ -291,7 +291,7 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
 
         fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
         return query(selectSql,params,clz,selectField);
@@ -304,7 +304,7 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
         StringBuilder whereSql = new StringBuilder();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
 
         fitParams(selectSql,selectField,fromSql,whereSql,params,clz,p,carriers);
 
@@ -317,11 +317,11 @@ public class NoSqlService<T> implements InitializingBean {
         return map;
     }
 
-    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<String> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         fitParams(selectSql,selectField,fromSql,new StringBuilder(),params,clz,p,carriers);
     }
 
-    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<String> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         //查询字段
         selectField.append(queryInitSqlMap.get(clz));
         fromSql.append("from").append(" ").append(queryTable.get(clz));
@@ -340,19 +340,23 @@ public class NoSqlService<T> implements InitializingBean {
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
-        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder);
+        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder,params);
     }
 
-    private void fitSelectSql(StringBuilder selectSql,StringBuilder whereSql,Map<String,Integer> limitMap,StringBuilder orderBuilder){
+    private void fitSelectSql(StringBuilder selectSql,StringBuilder whereSql,Map<String,Integer> limitMap,StringBuilder orderBuilder,List<Object> params){
         selectSql.append(whereSql).append( StringUtil.isEmpty( orderBuilder.toString())?"":" order by " + orderBuilder );
         if(limitMap.get("limit") != null){
             selectSql.append(" ").append("limit").append(" ");
-            if (limitMap.get("start") != null) selectSql.append(limitMap.get("start")).append(",");
-            selectSql.append(limitMap.get("limit"));
+            if (limitMap.get("start") != null) {
+                selectSql.append("?").append(",");
+                params.add(limitMap.get("start"));
+            }
+            selectSql.append("?");
+            params.add(limitMap.get("limit"));
         }
     }
 
-    private <P> void matchingParams(P p,StringBuilder whereSql,List<String> params,Map<String,Integer> limitMap) throws IllegalAccessException {
+    private <P> void matchingParams(P p,StringBuilder whereSql,List<Object> params,Map<String,Integer> limitMap) throws IllegalAccessException {
         boolean whetherWhere = true;
         Field[] fields = FieldFunction.getAllDeclaredField(p.getClass());
         for(Field field : fields){
@@ -410,15 +414,15 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
-    private <E> List<E> query(StringBuilder selectSql,List<String> params,Class<E> returnPoClz) throws  Exception {
+    private <E> List<E> query(StringBuilder selectSql,List<Object> params,Class<E> returnPoClz) throws  Exception {
         List<E> list = new ArrayList<>();
         log.info("SQL执行语句为：{}", selectSql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
-                statment.setString((i + 1), params.get(i));
+                statment.setObject((i + 1), params.get(i));
             }
-            log.info("SQL执行参数为：{}", String.join(",", params));
+            log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
                 while (rs.next()) {
@@ -438,15 +442,15 @@ public class NoSqlService<T> implements InitializingBean {
         return list;
     }
 
-    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<String> params,Class<E> returnPoClz,StringBuilder selectField) throws  Exception {
+    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<Object> params,Class<E> returnPoClz,StringBuilder selectField) throws  Exception {
         List<Map<String,Object>> list = new ArrayList<>();
         log.info("SQL执行语句为：{}", selectSql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
-                statment.setString((i + 1), params.get(i));
+                statment.setObject((i + 1), params.get(i));
             }
-            log.info("SQL执行参数为：{}", String.join(",", params));
+            log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             String[] selectFieldArgs = selectField.toString().replaceAll(" +","").split(",");
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
@@ -469,7 +473,7 @@ public class NoSqlService<T> implements InitializingBean {
         return list;
     }
 
-    private ResultSet invokeSql(StringBuilder selectSql,List<String> params) throws SQLException {
+    private ResultSet invokeSql(StringBuilder selectSql,List<Object> params) throws SQLException {
         try{
             return getPreparedStatment(selectSql,params). executeQuery();
         } catch (SQLException e) {
@@ -533,7 +537,7 @@ public class NoSqlService<T> implements InitializingBean {
         String tableName = clz.getAnnotation(TableName.class).value();
         StringBuilder insertSql = new StringBuilder("insert into " + tableName).append("(");
         List<String> sqlField = new ArrayList<>();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
         for(Field field : fields){
             try {
                 if(!field.isAnnotationPresent(IgnoreSql.class)) {
@@ -555,9 +559,9 @@ public class NoSqlService<T> implements InitializingBean {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(insertSql.toString());){
             for (int i = 0; i < params.size(); i++) {
-                statment.setString((i + 1), params.get(i));
+                statment.setObject((i + 1), params.get(i));
             }
-            log.info("SQL执行参数为：{}",  String.join(",", params));
+            log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             statment.execute();
         } catch (SQLException e) {
             log.error( "执行sql出错：{}",insertSql );
@@ -574,7 +578,7 @@ public class NoSqlService<T> implements InitializingBean {
         Field[] fields = clz.getDeclaredFields();
         String tableName = clz.getAnnotation(TableName.class).value();
         StringBuilder updateSql = new StringBuilder("update " + tableName + " set ");
-        List<String> sqlField = new ArrayList<>(),params = new ArrayList<>();
+        List<Object> sqlField = new ArrayList<>(),params = new ArrayList<>();
         List<String> primaryKeys = new ArrayList<>(),primaryValues = new ArrayList<>();
         for(Field field : fields){
             try {
@@ -629,7 +633,7 @@ public class NoSqlService<T> implements InitializingBean {
         Field[] fields = t.getClass().getDeclaredFields();
         String id = null,value = null;
         List<String> sqlField = new ArrayList<>();
-        List<String> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
         for (Field field : fields) {
             if(!field.isAnnotationPresent(IgnoreSql.class)) {
                 if (field.isAnnotationPresent(PrimaryKey.class)) {
@@ -672,7 +676,7 @@ public class NoSqlService<T> implements InitializingBean {
      */
     final public void delete(String tablename,String key,String value) throws SQLException {
         StringBuilder sql = new StringBuilder("delete from ").append(tablename).append(" where ").append(key).append(" = ?");
-        List<String> params = Collections.singletonList(value);
+        List<Object> params = Collections.singletonList(value);
         try {
             updateAndDelete(sql,params);
         } catch (SQLException e) {
@@ -682,26 +686,26 @@ public class NoSqlService<T> implements InitializingBean {
     }
 
 
-    private void updateAndDelete(StringBuilder sql,List<String> params) throws SQLException {
+    private void updateAndDelete(StringBuilder sql,List<Object> params) throws SQLException {
         //getPreparedStatment(sql,params).executeUpdate();
         log.info("SQL执行语句为：{}", sql);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statment = connection.prepareStatement(sql.toString());){
             for (int i = 0; i < params.size(); i++) {
-                statment.setString((i + 1), params.get(i));
+                statment.setObject((i + 1), params.get(i));
             }
-            log.info("SQL执行参数为：{}",  String.join(",", params));
+            log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             statment.executeUpdate();
         }
     }
 
-    private PreparedStatement getPreparedStatment(StringBuilder sql,List<String> params) throws SQLException {
+    private PreparedStatement getPreparedStatment(StringBuilder sql,List<Object> params) throws SQLException {
         log.info("SQL执行语句为：{}", sql);
         PreparedStatement  statment = dataSource.getConnection().prepareStatement(sql.toString());
         for(int i = 0;i < params.size(); i++){
-            statment.setString((i+1),params.get(i));
+            statment.setObject((i+1),params.get(i));
         }
-        log.info("SQL执行参数为：{}",String.join(",",params) );
+        log.info("SQL执行参数为：{}",String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
         return statment;
     }
 

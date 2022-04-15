@@ -646,7 +646,6 @@ public class NoSqlService<T> implements InitializingBean {
                         log.error(e.getMessage(), e);
                         throw e;
                     }
-                    break;
                 }
             }
         }

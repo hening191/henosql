@@ -637,6 +637,7 @@ public class NoSqlService<T> implements InitializingBean {
         for (Field field : fields) {
             if(!field.isAnnotationPresent(IgnoreSql.class)) {
                 if (field.isAnnotationPresent(PrimaryKey.class)) {
+                    field.setAccessible(true);
                     sqlField.add(field.getName());
                     try {
                         params.add( getFieldValue(field,t) );

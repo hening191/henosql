@@ -573,7 +573,7 @@ public class NoSqlService<T> implements InitializingBean {
      * 更新条件为主键@PrimaryKey
      * @param t
      */
-    final public <T> void update(T t) throws Exception {
+    final public <T> Integer update(T t) throws Exception {
         Class<?> clz = t.getClass();
         Field[] fields = clz.getDeclaredFields();
         String tableName = clz.getAnnotation(TableName.class).value();
@@ -617,7 +617,7 @@ public class NoSqlService<T> implements InitializingBean {
         }
         params.addAll(primaryValues);
         try {
-            updateAndDelete(updateSql,params);
+            return updateAndDelete(updateSql,params);
         } catch (SQLException e) {
             log.error("SQL执行错误",e);
             throw new SQLException("SQL执行错误");
@@ -628,7 +628,7 @@ public class NoSqlService<T> implements InitializingBean {
      * 仅适删除条件为主键@PrimaryKey（可以为联合主键）
      * @param t
      */
-    final public <T> void delete(T t) throws Exception {
+    final public <T> Integer delete(T t) throws Exception {
         String tableName = t.getClass().getAnnotation(TableName.class).value();
         Field[] fields = t.getClass().getDeclaredFields();
         String id = null,value = null;
@@ -660,7 +660,7 @@ public class NoSqlService<T> implements InitializingBean {
             whetherWhere = false;
         }
         try {
-            updateAndDelete(sql,params);
+            return updateAndDelete(sql,params);
         } catch (SQLException e) {
             log.error( "执行sql出错" );
             log.error(e.getMessage(),e);
@@ -674,11 +674,11 @@ public class NoSqlService<T> implements InitializingBean {
      * @param key
      * @param value
      */
-    final public void delete(String tablename,String key,String value) throws SQLException {
+    final public Integer delete(String tablename,String key,String value) throws SQLException {
         StringBuilder sql = new StringBuilder("delete from ").append(tablename).append(" where ").append(key).append(" = ?");
         List<Object> params = Collections.singletonList(value);
         try {
-            updateAndDelete(sql,params);
+            return updateAndDelete(sql,params);
         } catch (SQLException e) {
             log.error( "获取sql参数出错");
             throw new SQLException(e);
@@ -686,7 +686,7 @@ public class NoSqlService<T> implements InitializingBean {
     }
 
 
-    private void updateAndDelete(StringBuilder sql,List<Object> params) throws SQLException {
+    private Integer updateAndDelete(StringBuilder sql,List<Object> params) throws SQLException {
         //getPreparedStatment(sql,params).executeUpdate();
         log.info("SQL执行语句为：{}", sql);
         try (Connection connection = dataSource.getConnection();
@@ -695,7 +695,7 @@ public class NoSqlService<T> implements InitializingBean {
                 statment.setObject((i + 1), params.get(i));
             }
             log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
-            statment.executeUpdate();
+            return statment.executeUpdate();
         }
     }
 

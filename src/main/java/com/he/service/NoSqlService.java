@@ -22,6 +22,7 @@ import java.sql.*;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -531,7 +532,7 @@ public class NoSqlService<T> implements InitializingBean {
         return t;
     }
 
-    final public <T> void insert(T t) throws IllegalAccessException, SQLException {
+    final public <T> Boolean insert(T t) throws IllegalAccessException, SQLException {
         Class<?> clz = t.getClass();
         Field[] fields = clz.getDeclaredFields();
         String tableName = clz.getAnnotation(TableName.class).value();
@@ -562,7 +563,9 @@ public class NoSqlService<T> implements InitializingBean {
                 statment.setObject((i + 1), params.get(i));
             }
             log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
-            statment.execute();
+            Boolean result = statment.execute();
+            log.info("SQL插入执行结果：{}",  result);
+            return result;
         } catch (SQLException e) {
             log.error( "执行sql出错：{}",insertSql );
             throw e;
@@ -628,7 +631,25 @@ public class NoSqlService<T> implements InitializingBean {
      * 仅适删除条件为主键@PrimaryKey（可以为联合主键）
      * @param t
      */
-    final public <T> Integer delete(T t) throws Exception {
+    final public Integer delete(T t) throws Exception {
+        return delete(t , field -> field.isAnnotationPresent(PrimaryKey.class) );
+    }
+
+    /**
+     * 删除，可大量删除，谨慎使用
+     */
+    final public Integer deleteByField(T t) throws Exception {
+        return delete(t , field -> {
+            try {
+                return field.get(t) != null && !"".equals(field.get(t));
+            } catch (IllegalAccessException e) {
+                log.warn("",e);
+            }
+            return false;
+        });
+    }
+
+    private Integer delete(T t, Predicate<Field> predicate) throws Exception {
         String tableName = t.getClass().getAnnotation(TableName.class).value();
         Field[] fields = t.getClass().getDeclaredFields();
         String id = null,value = null;
@@ -636,7 +657,7 @@ public class NoSqlService<T> implements InitializingBean {
         List<Object> params = new ArrayList<>();
         for (Field field : fields) {
             if(!field.isAnnotationPresent(IgnoreSql.class)) {
-                if (field.isAnnotationPresent(PrimaryKey.class)) {
+                if ( predicate.test(field) ) {
                     field.setAccessible(true);
                     sqlField.add(field.getName());
                     try {
@@ -668,6 +689,7 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
+
     /**
      * 适用于单值条件删除
      * @param tablename
@@ -695,7 +717,9 @@ public class NoSqlService<T> implements InitializingBean {
                 statment.setObject((i + 1), params.get(i));
             }
             log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
-            return statment.executeUpdate();
+            Integer result = statment.executeUpdate();
+            log.info("SQL执行结果影响条数：{}", result);
+            return result;
         }
     }
 

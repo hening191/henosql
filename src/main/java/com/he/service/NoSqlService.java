@@ -214,7 +214,7 @@ public class NoSqlService<T> implements InitializingBean {
         Integer count = queryCount(selectCount,params).get(0);
 
         StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder,params);
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
 
         List<T> list = query(selectSql,params,clz);
         Map<String,Object> map = new HashMap<>();
@@ -234,7 +234,7 @@ public class NoSqlService<T> implements InitializingBean {
         matchingParams(p,whereSql,params,limitMap);
 
         StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder,params);
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
         return query(selectSql,params,clz);
     }
 
@@ -292,9 +292,18 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
+        StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();
+        StringBuilder orderBuilder = new StringBuilder();
 
-        fitParams(selectSql,selectField,fromSql,params,clz,p,carriers);
+        fitFieldAndFrom(selectSql,selectField,fromSql,params,clz,p,carriers);
+
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(p,whereSql,params,limitMap);
+
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+
         return query(selectSql,params,clz,selectField);
     }
 
@@ -306,23 +315,31 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder fromSql = new StringBuilder();
         StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();
+        StringBuilder orderBuilder = new StringBuilder();
 
-        fitParams(selectSql,selectField,fromSql,whereSql,params,clz,p,carriers);
+        fitFieldAndFrom(selectSql,selectField,fromSql,whereSql,params,clz,p,carriers);
 
-        List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(p,whereSql,params,limitMap);
+
         selectCount.append(" ").append(fromSql).append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
+
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+
+        List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
         Map<String,Object> map = new HashMap<>();
         map.put("list",list);
         map.put("count",count);
         return map;
     }
 
-    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
-        fitParams(selectSql,selectField,fromSql,new StringBuilder(),params,clz,p,carriers);
+    private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+        fitFieldAndFrom(selectSql,selectField,fromSql,new StringBuilder(),params,clz,p,carriers);
     }
 
-    private <P> void fitParams(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+    private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         //查询字段
         selectField.append(queryInitSqlMap.get(clz));
         fromSql.append("from").append(" ").append(queryTable.get(clz));
@@ -341,10 +358,10 @@ public class NoSqlService<T> implements InitializingBean {
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
-        fitSelectSql(selectSql,whereSql,limitMap,orderBuilder,params);
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
     }
 
-    private void fitSelectSql(StringBuilder selectSql,StringBuilder whereSql,Map<String,Integer> limitMap,StringBuilder orderBuilder,List<Object> params){
+    private void fitSelectSqlOrderByAndLimit(StringBuilder selectSql,StringBuilder whereSql,Map<String,Integer> limitMap,StringBuilder orderBuilder,List<Object> params){
         selectSql.append(whereSql).append( StringUtil.isEmpty( orderBuilder.toString())?"":" order by " + orderBuilder );
         if(limitMap.get("limit") != null){
             selectSql.append(" ").append("limit").append(" ");

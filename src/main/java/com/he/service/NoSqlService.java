@@ -561,7 +561,7 @@ public class NoSqlService<T> implements InitializingBean {
                 if(!field.isAnnotationPresent(IgnoreSql.class)) {
                     field.setAccessible(true);
                     if (field.get(t) != null && !"".equals(field.get(t))) {
-                        sqlField.add(field.getName());
+                        sqlField.add("`" + field.getName() + "`");
                         params.add( getFieldValue(field,t) );
                     }
                 }
@@ -606,12 +606,12 @@ public class NoSqlService<T> implements InitializingBean {
                     field.setAccessible(true);
                     String fieldValue =  getFieldValue(field,t) ;
                     if (field.isAnnotationPresent(PrimaryKey.class)) {
-                        primaryKeys.add(field.getName());
+                        primaryKeys.add("`" + field.getName() + "`");
                         primaryValues.add( getFieldValue(field,t) );
                         continue;
                     }
                     if (field.get(t) != null && !"".equals(field.get(t))) {
-                        sqlField.add(field.getName());
+                        sqlField.add("`" + field.getName() + "`");
                         params.add( getFieldValue(field,t) );
                     }
                 }
@@ -676,7 +676,7 @@ public class NoSqlService<T> implements InitializingBean {
             if(!field.isAnnotationPresent(IgnoreSql.class)) {
                 if ( predicate.test(field) ) {
                     field.setAccessible(true);
-                    sqlField.add(field.getName());
+                    sqlField.add("`" + field.getName() + "`");
                     try {
                         params.add( getFieldValue(field,t) );
                     } catch (IllegalAccessException e) {
@@ -783,7 +783,7 @@ public class NoSqlService<T> implements InitializingBean {
         else if(field.isAnnotationPresent(Max.class))return new StringBuilder(field.getAnnotation(Max.class).value());
         else if(field.isAnnotationPresent(MinAndEqual.class))return new StringBuilder(field.getAnnotation(MinAndEqual.class).value());
         else if(field.isAnnotationPresent(MaxAndEqual.class))return new StringBuilder(field.getAnnotation(MaxAndEqual.class).value());
-        return new StringBuilder(field.getName());
+        return new StringBuilder("`" + field.getName() + "`");
     }
 
     private <T> String getFieldValue(Field field,T t) throws IllegalAccessException {
@@ -833,7 +833,7 @@ public class NoSqlService<T> implements InitializingBean {
                 StringBuilder selectSql = new StringBuilder();
                 TreeMap<Integer,String> selectOrderMap = new TreeMap<>();
                 for (Field field : fields) {
-                    String fieldName = tableAlias + field.getName();
+                    String fieldName = tableAlias + "`" + field.getName() + "`";
                     if(!field.isAnnotationPresent(IgnoreSql.class) && !field.isAnnotationPresent(IgnoreSelectField.class)) {
                         selectSql.append(fieldName).append(",");
                         if (field.isAnnotationPresent(OrderByAsc.class)) {

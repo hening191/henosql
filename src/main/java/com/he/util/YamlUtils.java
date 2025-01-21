@@ -21,12 +21,16 @@ public class YamlUtils {
      * @return
      * @throws IOException
      */
-    public static Map<String, Object> yamlHandler(String yamlFile) throws IOException {
+    public static Map<String, Object> yamlHandler(String... yamlFile) throws IOException {
         //返回的结果
         Map<String, Object> result = new LinkedHashMap<>();
         Yaml yaml = new Yaml();
         //多个文件处理
-        Iterator<Resource> iterator = Arrays.stream(new Resource[]{new ClassPathResource(yamlFile)}).iterator();
+        Resource[] resources = new Resource[yamlFile.length];
+        for(int i = 0 ; i < yamlFile.length ; i ++){
+            resources[i] = new ClassPathResource(yamlFile[i]);
+        }
+        Iterator<Resource> iterator = Arrays.stream( resources ).iterator();
         log.info(iterator.toString());
         while (iterator.hasNext()) {
             Resource resource = iterator.next();

@@ -11,6 +11,7 @@ import com.he.util.YamlUtils;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -53,7 +54,6 @@ public class NoSqlService<T> implements InitializingBean {
     private static String poolPreparedStatements = "true";
     private static String maxPoolPreparedStatementPerConnectionSize = "20";
     private static String validationQuery = "select 1";
-
     private static String scanPoPackage;
     private static String excludeFieldString = "transid,datetime,pageNum";
 
@@ -71,6 +71,7 @@ public class NoSqlService<T> implements InitializingBean {
     protected Map<String, Object> getApplicationMap() throws IOException {
         Map<String, Object> map = YamlUtils.yamlHandler("application.yml");
         String suffix = map.get("spring.profiles.active").toString();
+        log.info("获取yml文件{}","application-" + suffix + ".yml");
         return YamlUtils.yamlHandler("application-" + suffix + ".yml");
     }
 
@@ -80,6 +81,7 @@ public class NoSqlService<T> implements InitializingBean {
     protected void initConfigInfo() throws IOException {
         try {
             Map<String, Object> appMap = getApplicationMap();
+            log.info("获取yml文件配置信息:{}",appMap);
             driverClassName = appMap.get("spring.datasource.driver-class-name").toString();
             log.info("noSql使用mysql驱动:{}",driverClassName);
             username = appMap.get("spring.datasource.username").toString();
@@ -107,7 +109,7 @@ public class NoSqlService<T> implements InitializingBean {
             scanPoPackage = appMap.get("noSql.scan.poPackage").toString();
             log.info("noSql映射实体类包:{}",scanPoPackage);
 
-            if(!StringUtil.isEmpty(appMap.get("noSql.select.excludeField").toString()))excludeFieldString = appMap.get("noSql.select.excludeField").toString();
+            if(appMap.get("noSql.pool.validationQuery") != null)excludeFieldString = appMap.get("noSql.select.excludeField").toString();
             log.info("不参与查询的字段设置：{}",excludeFieldString);
 
         } catch (IOException e) {
@@ -170,7 +172,11 @@ public class NoSqlService<T> implements InitializingBean {
 
     final public <T> List<T> queryList(T tp) throws Exception {
         Class clz =  tp.getClass();
-        Field[] fields = clz.getDeclaredFields();
+        return queryList(clz,tp);
+    }
+
+    final public <T> List<T> queryList(Class clz , T tp) throws Exception {
+        Field[] fields = tp.getClass().getDeclaredFields();
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         boolean whetherWhere = true;
         List<Object> params = new ArrayList<>();
@@ -202,7 +208,7 @@ public class NoSqlService<T> implements InitializingBean {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询数量
-        StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
+        StringBuilder selectCount = new StringBuilder("select count(*) count ").append("from").append(" ").append(queryTable.get(clz));
         //查询条件
         StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();

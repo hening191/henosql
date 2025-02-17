@@ -828,14 +828,14 @@ public class NoSqlService<T> implements InitializingBean {
      * 仅适删除条件为主键@PrimaryKey（可以为联合主键）
      * @param t
      */
-    final public Integer delete(T t) throws Exception {
+    final public <T> Integer delete(T t) throws Exception {
         return delete(t , field -> field.isAnnotationPresent(PrimaryKey.class) );
     }
 
     /**
      * 删除，可大量删除，谨慎使用
      */
-    final public Integer deleteByField(T t) throws Exception {
+    final public <T> Integer deleteByField(T t) throws Exception {
         return delete(t , field -> {
             try {
                 return field.get(t) != null && !"".equals(field.get(t));
@@ -846,10 +846,9 @@ public class NoSqlService<T> implements InitializingBean {
         });
     }
 
-    private Integer delete(T t, Predicate<Field> predicate) throws Exception {
+    private <T> Integer delete(T t, Predicate<Field> predicate) throws Exception {
         String tableName = t.getClass().getAnnotation(TableName.class).value();
         Field[] fields = t.getClass().getDeclaredFields();
-        String id = null,value = null;
         List<String> sqlField = new ArrayList<>();
         List<Object> params = new ArrayList<>();
         for (Field field : fields) {

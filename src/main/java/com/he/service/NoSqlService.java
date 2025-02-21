@@ -783,7 +783,6 @@ public class NoSqlService<T> implements InitializingBean {
             try {
                 if(!field.isAnnotationPresent(IgnoreSql.class)) {
                     field.setAccessible(true);
-                    String fieldValue =  getFieldValue(field,t) ;
                     if (field.isAnnotationPresent(PrimaryKey.class)) {
                         primaryKeys.add("`" + field.getName() + "`");
                         primaryValues.add( getFieldValue(field,t) );
@@ -838,6 +837,7 @@ public class NoSqlService<T> implements InitializingBean {
     final public <T> Integer deleteByField(T t) throws Exception {
         return delete(t , field -> {
             try {
+                field.setAccessible(true);
                 return field.get(t) != null && !"".equals(field.get(t));
             } catch (IllegalAccessException e) {
                 log.warn("",e);

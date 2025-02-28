@@ -325,7 +325,6 @@ public class NoSqlService<T> implements InitializingBean {
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
-
         fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
 
         return query(selectSql,params,clz,selectField);
@@ -381,8 +380,8 @@ public class NoSqlService<T> implements InitializingBean {
         selectSql.append(selectField).append(" ").append(fromSql);
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
-        matchingParams(p,whereSql,params,limitMap);
-        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+        //matchingParams(p,whereSql,params,limitMap);
+        //fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
     }
 
     private void fitSelectSqlOrderByAndLimit(StringBuilder selectSql,StringBuilder whereSql,Map<String,Integer> limitMap,StringBuilder orderBuilder,List<Object> params){

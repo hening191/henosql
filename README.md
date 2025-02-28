@@ -1,23 +1,28 @@
 # henosql
 全新的无SQL框架，无需写任何接口和SQL，只通过注解实体即可进行多样的SQL操作。
 设计初衷：为了减少sql语句开发，以及后续可能的表结构变动带来的高昂维护成本。
-# version1.11.0
+
+# version1.11
+## version1.11.0
 修复了多表联查下，在某些情况不支持表别名使用的问题。
 
-# version1.10.4
+# version1.10
+
+## version1.10.4
 优化联表查询的执行流程。
 
-# version1.10.3
+## version1.10.3
 修复删除操作的某些情况下属性访问权限受限的问题.
 
-# version1.10.1
+## version1.10.1
 修复了delete(T t)传入参数的问题.
 
-# version1.10.0
+## version1.10.0
 1、修正excludeFieldString配置文件获取
 2、增加双表联查快捷方法
 
-# version1.9.0
+# version1.9
+## version1.9.0
 增加了精准查询单个对象的方法.
 
 # version1.8

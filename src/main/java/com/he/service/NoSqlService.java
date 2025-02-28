@@ -64,6 +64,8 @@ public class NoSqlService<T> implements InitializingBean {
     private static Map<Class<?>,StringBuilder> queryInitOrderMap = new HashMap<>();    //查询排序
     private static Map<Class<?>,String> queryTable = new HashMap<>();                  //查询表名
     private static Map<Class<?>,String> queryAlias = new HashMap<>();                  //表名别名
+    private static Map<Class<?>,StringBuilder> queryInitAliasSqlMap = new HashMap<>(); //带表别名的查询字段
+    private static Map<Class<?>,StringBuilder> aliasFieldInitMap = new HashMap<>();    //带表别名的列名
     private static Set<String> excludeField = new HashSet<>(Arrays.asList("transid","datetime","pageNum"));  //这些字段不参与查询字段
 
     private static boolean printSql = false;
@@ -364,11 +366,14 @@ public class NoSqlService<T> implements InitializingBean {
 
     private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         //查询字段
-        selectField.append(queryInitSqlMap.get(clz));
+        StringBuilder selectSqlField = new StringBuilder();
+        selectSqlField.append(queryInitAliasSqlMap.get(clz));
         fromSql.append("from").append(" ").append(queryTable.get(clz));
+        selectField.append(aliasFieldInitMap.get(clz));
         StringBuilder orderBuilder = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
         for(int i = 0;i < carriers.length; i++){
-            selectField.append(",").append(queryInitSqlMap.get( carriers[i].getRightTable() ));
+            selectSqlField.append(",").append(queryInitAliasSqlMap.get( carriers[i].getRightTable() ));
+            selectField.append(",").append(aliasFieldInitMap.get( carriers[i].getRightTable() ));
             fromSql.append(" left join ").append( queryTable.get(carriers[i].getRightTable()) )
                     .append(" on ").append( queryAlias.get( carriers[i].getLeftTable())).append(".").append(carriers[i].getLeftKey())
                     .append(" = ").append( queryAlias.get( carriers[i].getRightTable()) ).append(".").append(carriers[i].getRightKey());
@@ -377,8 +382,8 @@ public class NoSqlService<T> implements InitializingBean {
                 orderBuilder.append( queryInitOrderMap.get(carriers[i].getRightTable()) );
             }
         }
-        selectSql.append(selectField).append(" ").append(fromSql);
-        Map<String,Integer> limitMap = new HashMap<>();
+        selectSql.append(selectSqlField).append(" ").append(fromSql);
+        //Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         //matchingParams(p,whereSql,params,limitMap);
         //fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
@@ -1009,11 +1014,15 @@ public class NoSqlService<T> implements InitializingBean {
                 queryTable.put(c,tableName);
                 Field[] fields = c.getDeclaredFields();
                 StringBuilder selectSql = new StringBuilder();
+                StringBuilder selectAliasSql = new StringBuilder();
+                StringBuilder aliasField = new StringBuilder();
                 TreeMap<Integer,String> selectOrderMap = new TreeMap<>();
                 for (Field field : fields) {
                     String fieldName = tableAlias + "`" + field.getName() + "`";
                     if(!field.isAnnotationPresent(IgnoreSql.class) && !field.isAnnotationPresent(IgnoreSelectField.class)) {
                         selectSql.append(fieldName).append(",");
+                        selectAliasSql.append(fieldName).append(" as `").append(tableAlias).append(field.getName()).append("`").append(",");
+                        aliasField.append(tableAlias).append(field.getName()).append(",");
                         if (field.isAnnotationPresent(OrderByAsc.class)) {
                             selectOrderMap.put(field.getAnnotation(OrderByAsc.class).value(), fieldName + " asc");
                         }
@@ -1022,7 +1031,8 @@ public class NoSqlService<T> implements InitializingBean {
                         }
                     }
                 }
-                selectSql.deleteCharAt(selectSql.length() - 1).append(" ");
+                //selectSql.deleteCharAt(selectSql.length() - 1).append(" ");
+                this.replaceLastChatToSpace(selectSql,selectAliasSql,aliasField);
                 if(selectOrderMap.size() > 0){
                     StringBuilder orderBuilder = new StringBuilder();
                     boolean hasOrder = false;
@@ -1036,9 +1046,16 @@ public class NoSqlService<T> implements InitializingBean {
                     queryInitOrderMap.put(c , orderBuilder);
                 }
                 queryInitSqlMap.put(c, selectSql);
+                queryInitAliasSqlMap.put(c, selectAliasSql);
+                aliasFieldInitMap.put(c, aliasField);
             }
         }
     }
 
+    private void replaceLastChatToSpace(StringBuilder... strs){
+        for(int i = 0; i < strs.length; i ++) {
+            strs[i].deleteCharAt(strs[i].length() - 1).append(" ");
+        }
+    }
 
 }

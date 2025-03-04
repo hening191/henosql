@@ -4,8 +4,8 @@
 
 # version1.12
 ## v1.12.0
-1、增加了注释注解@Comment，并在注解、类、方法上增加注释说明注解；
-2、增加了新注解@SelectDateFormat，用于格式化被查询日期字段；
+1、增加了注释注解@Comment，并在注解、类、方法上增加注释说明注解；  
+2、增加了新注解@SelectDateFormat，用于格式化被查询日期字段；  
 3、增加了缓存HNSCache类，并增加了获取数据表对应别名的方法getAliasMap(Class)。
 
 # version1.11

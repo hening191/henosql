@@ -2,6 +2,7 @@ package com.he.service;
 
 import com.alibaba.druid.pool.DruidDataSourceFactory;
 import com.he.common.annotation.sql.*;
+import com.he.common.comment.Comment;
 import com.he.common.function.ClassFunction;
 import com.he.common.function.FieldFunction;
 import com.he.common.vo.BaseForm;
@@ -11,7 +12,6 @@ import com.he.util.YamlUtils;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 @Setter
+@Comment("查询服务")
 public class NoSqlService<T> implements InitializingBean {
 
     private static String driverClassName;
@@ -159,6 +160,7 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
+    @Comment("查询单个实体，参数内置")
     final public <T> T query(T t) throws Exception {
         List<T> list = queryList(t);
         if(list == null || list.size() <= 0 )return null;
@@ -170,6 +172,7 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
+    @Comment("查询单个实体，参数另传")
     final public <T> T query(Class clz,T t) throws Exception {
         List<T> list = queryList(clz,t);
         if(list == null || list.size() <= 0 )return null;
@@ -181,6 +184,7 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
+    @Comment("查询列表，无参数")
     final public <T> List<T> queryList(Class<T> clt) throws Exception {
         try {
             return queryList(clt.newInstance());
@@ -190,11 +194,13 @@ public class NoSqlService<T> implements InitializingBean {
         }
     }
 
+    @Comment("查询列表，参数内置")
     final public <T> List<T> queryList(T tp) throws Exception {
         Class clz =  tp.getClass();
         return queryList(clz,tp);
     }
 
+    @Comment("查询列表，参数另传")
     final public <T> List<T> queryList(Class clz , T tp) throws Exception {
         Field[] fields = tp.getClass().getDeclaredFields();
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
@@ -224,6 +230,7 @@ public class NoSqlService<T> implements InitializingBean {
         return query(selectSql,params,clz);
     }
 
+    @Comment("分页查询，返回总数count和当前页list，参数另传")
     final public <T,P> Map<String,Object> queryForm(Class<T> clz, P p) throws Exception {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
@@ -249,6 +256,7 @@ public class NoSqlService<T> implements InitializingBean {
         return map;
     }
 
+    @Comment("分页查询，返回当前页，参数另传")
     final public <T,P> List<T> queryFormList(Class<T> clz, P p) throws Exception {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
@@ -264,14 +272,17 @@ public class NoSqlService<T> implements InitializingBean {
         return query(selectSql,params,clz);
     }
 
+    @Comment("分页查询，返回总数count和当前页list，参数内置")
     final public <T> Map<String,Object> queryForm(T t) throws Exception {
         return queryForm(t.getClass(),t);
     }
 
+    @Comment("分页查询，返回当前页，参数内置")
     final public <T> List<T> queryFormList(T t) throws Exception {
         return (List<T>) queryFormList(t.getClass(),t);
     }
 
+    @Comment("分页总数，参数另传")
     final public <T> Integer queryFormCount(Class<T> clz, BaseForm rv) throws Exception {
         //查询数量
         StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
@@ -314,24 +325,27 @@ public class NoSqlService<T> implements InitializingBean {
         return list;
     }
 
+    @Comment("联表查询，参数另传")
     final public <P> List<Map<String,Object>> queryList(Class<?> clz,P p, Carrier... carriers) throws Exception {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
         StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();
-        StringBuilder orderBuilder = new StringBuilder();
+        StringBuilder orderSql = new StringBuilder();
 
-        fitFieldAndFrom(selectSql,selectField,fromSql,params,clz,p,carriers);
+        fitFieldAndFrom(selectSql,selectField,fromSql,orderSql,params,clz,p,carriers);
 
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
-        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderSql,params);
 
         return query(selectSql,params,clz,selectField);
     }
 
+    @Comment("联表分页查询，参数另传")
     final public <P> Map<String,Object> queryForm(Class<?> clz,P p, Carrier... carriers) throws Exception {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectCount = new StringBuilder("select count(1) count ");
@@ -340,9 +354,9 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder fromSql = new StringBuilder();
         StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();
-        StringBuilder orderBuilder = new StringBuilder();
+        StringBuilder orderSql = new StringBuilder();
 
-        fitFieldAndFrom(selectSql,selectField,fromSql,whereSql,params,clz,p,carriers);
+        fitFieldAndFrom(selectSql,selectField,fromSql,whereSql,orderSql,params,clz,p,carriers);
 
         Map<String,Integer> limitMap = new HashMap<>();
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
@@ -351,7 +365,7 @@ public class NoSqlService<T> implements InitializingBean {
         selectCount.append(" ").append(fromSql).append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
 
-        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderSql,params);
 
         List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
         Map<String,Object> map = new HashMap<>();
@@ -360,17 +374,18 @@ public class NoSqlService<T> implements InitializingBean {
         return map;
     }
 
-    private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
-        fitFieldAndFrom(selectSql,selectField,fromSql,new StringBuilder(),params,clz,p,carriers);
+    private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder orderSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+        fitFieldAndFrom(selectSql,selectField,fromSql,new StringBuilder(),orderSql,params,clz,p,carriers);
     }
 
-    private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
+    private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder whereSql,StringBuilder orderSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         //查询字段
         StringBuilder selectSqlField = new StringBuilder();
         selectSqlField.append(queryInitAliasSqlMap.get(clz));
         fromSql.append("from").append(" ").append(queryTable.get(clz));
         selectField.append(aliasFieldInitMap.get(clz));
-        StringBuilder orderBuilder = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        //StringBuilder orderBuilder = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        orderSql = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
         for(int i = 0;i < carriers.length; i++){
             selectSqlField.append(",").append(queryInitAliasSqlMap.get( carriers[i].getRightTable() ));
             selectField.append(",").append(aliasFieldInitMap.get( carriers[i].getRightTable() ));
@@ -378,8 +393,8 @@ public class NoSqlService<T> implements InitializingBean {
                     .append(" on ").append( queryAlias.get( carriers[i].getLeftTable())).append(".").append(carriers[i].getLeftKey())
                     .append(" = ").append( queryAlias.get( carriers[i].getRightTable()) ).append(".").append(carriers[i].getRightKey());
             if( queryInitOrderMap.get(carriers[i].getRightTable())!=null ) {
-                if( !StringUtil.isEmpty(orderBuilder.toString() ) ) orderBuilder.append(",");
-                orderBuilder.append( queryInitOrderMap.get(carriers[i].getRightTable()) );
+                if( !StringUtil.isEmpty(orderSql.toString() ) ) orderSql.append(",");
+                orderSql.append( queryInitOrderMap.get(carriers[i].getRightTable()) );
             }
         }
         selectSql.append(selectSqlField).append(" ").append(fromSql);
@@ -486,6 +501,7 @@ public class NoSqlService<T> implements InitializingBean {
     /**
      * 仅限两表left join的简便使用方式
      */
+    @Comment("两表联表查询，快捷方法，参数内置")
     final public <T,E> List<Map<String,Object>> queryTwoLeftJoinList(T t,E e,String leftKey,String rightKey) throws Exception {
         StringBuilder selectSql = new StringBuilder("select ");
         Class clt = t.getClass() , cle = e.getClass();
@@ -506,6 +522,7 @@ public class NoSqlService<T> implements InitializingBean {
         return query(selectSql,params,selectField);
     }
 
+    @Comment("两表联表查询总数，快捷方法，参数内置")
     final public <T,E> Integer queryTwoLeftJoinCount(T t,E e,String leftKey,String rightKey) throws Exception {
         StringBuilder selectCount = new StringBuilder("select count(1) count ");
         Class clt = t.getClass() , cle = e.getClass();
@@ -522,6 +539,7 @@ public class NoSqlService<T> implements InitializingBean {
         return queryCount(selectCount,params).get(0);
     }
 
+    @Comment("两表联表分页查询，快捷方法，参数内置")
     final public <T,E> Map<String,Object> queryTwoLeftJoinForm(T t,E e,String leftKey,String rightKey,Integer page_num,Integer page_size) throws Exception {
         Map<String,Object> result = new HashMap<>();
         StringBuilder selectSql = new StringBuilder("select ");
@@ -688,7 +706,7 @@ public class NoSqlService<T> implements InitializingBean {
         //根据注解情况，获取实际查询字段
         StringBuilder selectField = whetherGetAnnotationValueAsSqlField(field);
         selectField = new StringBuilder(tableAlias).append(selectField);
-        if (field.isAnnotationPresent(SqlDateFormat.class))selectField = new StringBuilder("date_format(").append(selectField).append(",'%Y%m%d%H%i%s')");
+        if (field.isAnnotationPresent(SqlDateFormat.class))selectField = new StringBuilder("date_format(").append(selectField).append(",'"+ field.getAnnotation(SqlDateFormat.class).value() +"')");
         //多种查询条件
         if (field.isAnnotationPresent(SqlFieldLike.class))
             whereSql.append(selectField).append(" like concat('%',?,'%')");
@@ -732,6 +750,7 @@ public class NoSqlService<T> implements InitializingBean {
         return t;
     }
 
+    @Comment("插入数据")
     final public <T> Boolean insert(T t) throws IllegalAccessException, SQLException {
         Class<?> clz = t.getClass();
         Field[] fields = clz.getDeclaredFields();
@@ -776,6 +795,7 @@ public class NoSqlService<T> implements InitializingBean {
      * 更新条件为主键@PrimaryKey
      * @param t
      */
+    @Comment("更新数据，更新条件为主键@PrimaryKey")
     final public <T> Integer update(T t) throws Exception {
         Class<?> clz = t.getClass();
         Field[] fields = clz.getDeclaredFields();
@@ -831,6 +851,7 @@ public class NoSqlService<T> implements InitializingBean {
      * 仅适删除条件为主键@PrimaryKey（可以为联合主键）
      * @param t
      */
+    @Comment("删除数据，仅适删除条件为主键@PrimaryKey（可以为联合主键）")
     final public <T> Integer delete(T t) throws Exception {
         return delete(t , field -> field.isAnnotationPresent(PrimaryKey.class) );
     }
@@ -838,6 +859,7 @@ public class NoSqlService<T> implements InitializingBean {
     /**
      * 删除，可大量删除，谨慎使用
      */
+    @Comment("删除数据，可大量删除，条件为内置参数")
     final public <T> Integer deleteByField(T t) throws Exception {
         return delete(t , field -> {
             try {
@@ -896,6 +918,7 @@ public class NoSqlService<T> implements InitializingBean {
      * @param key
      * @param value
      */
+    @Comment("删除数据，适用于单值条件删除")
     final public Integer delete(String tablename,String key,String value) throws SQLException {
         StringBuilder sql = new StringBuilder("delete from ").append(tablename).append(" where ").append(key).append(" = ?");
         List<Object> params = Collections.singletonList(value);
@@ -1002,6 +1025,7 @@ public class NoSqlService<T> implements InitializingBean {
                 if(c.isAnnotationPresent(Alias.class)) {
                     if( !StringUtil.isEmpty(c.getAnnotation(Alias.class).value()) ) {
                         tableAlias = c.getAnnotation(Alias.class).value();
+                        HNSCache.getInstance().putAliasMap(c , tableAlias);
                         tableName = tableName+" as "+c.getAnnotation(Alias.class).value();
                         if(queryAlias.containsValue(tableAlias)){
                             log.error("映射表类中定义的别名（Alias）重复！");
@@ -1020,15 +1044,18 @@ public class NoSqlService<T> implements InitializingBean {
                 for (Field field : fields) {
                     String fieldName = tableAlias + "`" + field.getName() + "`";
                     if(!field.isAnnotationPresent(IgnoreSql.class) && !field.isAnnotationPresent(IgnoreSelectField.class)) {
-                        selectSql.append(fieldName).append(",");
-                        selectAliasSql.append(fieldName).append(" as `").append(tableAlias).append(field.getName()).append("`").append(",");
-                        aliasField.append(tableAlias).append(field.getName()).append(",");
                         if (field.isAnnotationPresent(OrderByAsc.class)) {
                             selectOrderMap.put(field.getAnnotation(OrderByAsc.class).value(), fieldName + " asc");
                         }
                         if (field.isAnnotationPresent(OrderByDesc.class)) {
                             selectOrderMap.put(field.getAnnotation(OrderByDesc.class).value(), fieldName + " desc");
                         }
+                        if(field.isAnnotationPresent(SelectDateFormat.class)){
+                            fieldName = "date_format(" + fieldName + ",'" + field.getAnnotation(SelectDateFormat.class).value() +"')";
+                        }
+                        selectSql.append(fieldName + " as " + field.getName()).append(",");
+                        selectAliasSql.append(fieldName).append(" as `").append(tableAlias).append(field.getName()).append("`").append(",");
+                        aliasField.append(tableAlias).append(field.getName()).append(",");
                     }
                 }
                 //selectSql.deleteCharAt(selectSql.length() - 1).append(" ");

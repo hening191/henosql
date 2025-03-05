@@ -8,6 +8,9 @@
 2、增加了新注解@SelectDateFormat，用于格式化被查询日期字段；  
 3、增加了缓存HNSCache类，并增加了获取数据表对应别名的方法getAliasMap(Class)。
 
+## v1.12.1
+优化双表联查。
+
 # version1.11
 ## version1.11.0
 修复了多表联查下，在某些情况不支持表别名使用的问题。

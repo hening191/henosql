@@ -505,21 +505,22 @@ public class NoSqlService<T> implements InitializingBean {
     final public <T,E> List<Map<String,Object>> queryTwoLeftJoinList(T t,E e,String leftKey,String rightKey) throws Exception {
         StringBuilder selectSql = new StringBuilder("select ");
         Class clt = t.getClass() , cle = e.getClass();
-        StringBuilder selectField = new StringBuilder();
+        StringBuilder selectSqlField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
         StringBuilder whereSql = new StringBuilder();
         List<Object> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         StringBuilder orderBuilder = new StringBuilder();
+        StringBuilder resultField = new StringBuilder();
 
-        fitField(selectField,clt,cle);
+        fitField(selectSqlField,resultField,clt,cle);
         fitFrom(fromSql,clt,cle,leftKey,rightKey);
         matchingParamsForTLJ(t,whereSql,params,limitMap);
         matchingParamsForTLJ(e,whereSql,params,limitMap);
         fitOrder(orderBuilder,clt,cle);
-        selectSql.append(" ").append(selectField).append(" ").append(fromSql).append(" ").append(whereSql).append(" ").append(orderBuilder);
+        selectSql.append(" ").append(selectSqlField).append(" ").append(fromSql).append(" ").append(whereSql).append(" ").append(orderBuilder);
 
-        return query(selectSql,params,selectField);
+        return query(selectSql,params,resultField);
     }
 
     @Comment("两表联表查询总数，快捷方法，参数内置")
@@ -545,15 +546,16 @@ public class NoSqlService<T> implements InitializingBean {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectCount = new StringBuilder("select count(1) count ");
         Class clt = t.getClass() , cle = e.getClass();
-        StringBuilder selectField = new StringBuilder();
+        StringBuilder selectSqlField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
         StringBuilder whereSql = new StringBuilder();
         StringBuilder limitBuilder = new StringBuilder();
         List<Object> params = new ArrayList<>();
         Map<String,Integer> limitMap = new HashMap<>();
         StringBuilder orderBuilder = new StringBuilder();
+        StringBuilder resultField = new StringBuilder();
 
-        fitField(selectField,clt,cle);
+        fitField(selectSqlField,resultField,clt,cle);
         fitFrom(fromSql,clt,cle,leftKey,rightKey);
         matchingParamsForTLJ(t,whereSql,params,limitMap);
         matchingParamsForTLJ(e,whereSql,params,limitMap);
@@ -563,15 +565,17 @@ public class NoSqlService<T> implements InitializingBean {
         limitMap.put("limit",page_size);
         limitMap.put("start",page_size * (page_num - 1) );
         fitLimit(limitBuilder,params,limitMap);
-        selectSql.append(" ").append(selectField).append(" ").append(fromSql).append(" ").append(whereSql).append(" ").append(orderBuilder).append(" ").append(limitBuilder);
+        selectSql.append(" ").append(selectSqlField).append(" ").append(fromSql).append(" ").append(whereSql).append(" ").append(orderBuilder).append(" ").append(limitBuilder);
 
 
-        result.put("list",query(selectSql,params,selectField));
+        result.put("list",query(selectSql,params,resultField));
         return result;
     }
 
-    private void fitField(StringBuilder selectField , Class clt,Class cle){
-        selectField.append(queryInitSqlMap.get(clt)).append(",").append(queryInitSqlMap.get(cle));
+    private void fitField(StringBuilder selectField ,StringBuilder resultField , Class clt,Class cle){
+        //selectField.append(queryInitSqlMap.get(clt)).append(",").append(queryInitSqlMap.get(cle));
+        selectField.append(queryInitAliasSqlMap.get(clt)).append(",").append(queryInitAliasSqlMap.get(cle));
+        resultField.append(aliasFieldInitMap.get(clt)).append(",").append(aliasFieldInitMap.get(cle));
     }
 
     private void fitFrom(StringBuilder fromSql , Class clt,Class cle,String leftKey,String rightKey){

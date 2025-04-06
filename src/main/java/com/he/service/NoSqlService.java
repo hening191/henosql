@@ -728,25 +728,25 @@ public class NoSqlService<T> implements InitializingBean {
             if(!field.isAnnotationPresent(IgnoreSql.class) && !field.isAnnotationPresent(IgnoreSelectField.class)) {
                 field.setAccessible(true);
                 Type type = field.getType();
-                if (type.getTypeName().equals(String.class.getTypeName())) { //如果需要可以继续补充
+                if (type.getTypeName().equals(String.class.getTypeName()) && rs.getObject(field.getName())!= null) { //如果需要可以继续补充
                     field.set(t, rs.getString(field.getName()));
-                } else if (type.getTypeName().equals(Integer.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Integer.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getInt(field.getName()));
-                } else if (type.getTypeName().equals(Long.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Long.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getLong(field.getName()));
-                } else if (type.getTypeName().equals(Short.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Short.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getShort(field.getName()));
-                } else if (type.getTypeName().equals(Byte.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Byte.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getByte(field.getName()));
-                } else if (type.getTypeName().equals(java.util.Date.class.getTypeName())) {
+                } else if (type.getTypeName().equals(java.util.Date.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getTimestamp(field.getName()));
-                } else if (type.getTypeName().equals(Boolean.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Boolean.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getBoolean(field.getName()));
-                } else if (type.getTypeName().equals(BigDecimal.class.getTypeName())) {
+                } else if (type.getTypeName().equals(BigDecimal.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getBigDecimal(field.getName()));
-                } else if (type.getTypeName().equals(Double.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Double.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getDouble(field.getName()));
-                } else if (type.getTypeName().equals(Float.class.getTypeName())) {
+                } else if (type.getTypeName().equals(Float.class.getTypeName()) && rs.getObject(field.getName())!= null) {
                     field.set(t, rs.getFloat(field.getName()));
                 }
             }

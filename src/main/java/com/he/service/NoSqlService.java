@@ -1,20 +1,21 @@
 package com.he.service;
 
-import com.alibaba.druid.pool.DruidDataSourceFactory;
+import com.he.common.ConfigParam;
+import com.he.common.NoSQLException;
 import com.he.common.annotation.sql.*;
-import com.he.common.comment.Comment;
+import com.he.common.annotation.comment.Comment;
 import com.he.common.function.ClassFunction;
 import com.he.common.function.FieldFunction;
 import com.he.common.vo.BaseForm;
 import com.he.entity.Carrier;
+import com.he.entity.OrderEntity;
+import com.he.entity.OrderType;
 import com.he.util.StringUtil;
-import com.he.util.YamlUtils;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
 
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
@@ -23,6 +24,7 @@ import java.sql.*;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -38,29 +40,6 @@ import java.util.stream.Collectors;
 @Comment("查询服务")
 public class NoSqlService<T> implements InitializingBean {
 
-    private static String driverClassName;
-    private static String username;
-    private static String password;
-    private static String url;
-    private static String initialSize = "5";
-    private static String maxActive = "20";
-    private static String maxWait = "10000";
-    private static String timeBetweenEvictionRunsMillis = "3000";
-    private static String minEvictableIdleTimeMillis = "300000";
-    private static String removeAbandoned = "true";
-    private static String removeAbandonedTimeout = "180";
-    private static String logAbandoned = "false";
-    private static String testWhileIdle = "true";
-    private static String testOnBorrow = "false";
-    private static String testOnReturn = "false";
-    private static String poolPreparedStatements = "true";
-    private static String maxPoolPreparedStatementPerConnectionSize = "20";
-    private static String validationQuery = "select 1";
-    private static String scanPoPackage;
-    private static String excludeFieldString = "transid,datetime,pageNum";
-
-    private static DataSource dataSource ;
-
     private static Map<Class<?>,StringBuilder> queryInitSqlMap = new HashMap<>();      //查询字段
     private static Map<Class<?>,StringBuilder> queryInitOrderMap = new HashMap<>();    //查询排序
     private static Map<Class<?>,String> queryTable = new HashMap<>();                  //查询表名
@@ -68,140 +47,75 @@ public class NoSqlService<T> implements InitializingBean {
     private static Map<Class<?>,StringBuilder> queryInitAliasSqlMap = new HashMap<>(); //带表别名的查询字段
     private static Map<Class<?>,StringBuilder> aliasFieldInitMap = new HashMap<>();    //带表别名的列名
     private static Set<String> excludeField = new HashSet<>(Arrays.asList("transid","datetime","pageNum"));  //这些字段不参与查询字段
+    private static String poPackageSource;
 
-    private static boolean printSql = false;
 
-    /**
-     * 可继承重写，增加额外加载配置
-     */
-    protected Map<String, Object> getApplicationMap() throws IOException {
-        Map<String, Object> map = YamlUtils.yamlHandler("application.yml");
-        String suffix = map.get("spring.profiles.active").toString();
-        log.info("获取yml文件{}","application-" + suffix + ".yml");
-        return YamlUtils.yamlHandler("application-" + suffix + ".yml");
-    }
-
-    /**
-     * 可继承重写，增加额外加载配置
-     */
-    protected void initConfigInfo() throws IOException {
-        try {
-            Map<String, Object> appMap = getApplicationMap();
-            log.info("获取yml文件配置信息:{}",appMap);
-            driverClassName = appMap.get("spring.datasource.driver-class-name").toString();
-            log.info("noSql使用mysql驱动:{}",driverClassName);
-            username = appMap.get("spring.datasource.username").toString();
-            log.info("noSql连接池用户名:{}",username);
-            password = appMap.get("spring.datasource.password").toString();
-            url = appMap.get("spring.datasource.url").toString();
-            log.info("noSql连接池url:{}",url);
-
-            //连接池配置
-            if(appMap.get("noSql.pool.initialSize") != null ) initialSize = appMap.get("noSql.pool.initialSize").toString();
-            if(appMap.get("noSql.pool.maxActive") != null ) maxActive = appMap.get("noSql.pool.maxActive").toString();
-            if(appMap.get("noSql.pool.maxWait") != null ) maxWait = appMap.get("noSql.pool.maxWait").toString();
-            if(appMap.get("noSql.pool.timeBetweenEvictionRunsMillis") != null ) timeBetweenEvictionRunsMillis = appMap.get("noSql.pool.timeBetweenEvictionRunsMillis").toString();
-            if(appMap.get("noSql.pool.minEvictableIdleTimeMillis") != null ) minEvictableIdleTimeMillis = appMap.get("noSql.pool.minEvictableIdleTimeMillis").toString();
-            if(appMap.get("noSql.pool.removeAbandoned") != null ) removeAbandoned = appMap.get("noSql.pool.removeAbandoned").toString();
-            if(appMap.get("noSql.pool.removeAbandonedTimeout") != null ) removeAbandonedTimeout = appMap.get("noSql.pool.removeAbandonedTimeout").toString();
-            if(appMap.get("noSql.pool.logAbandoned") != null ) logAbandoned = appMap.get("noSql.pool.logAbandoned").toString();
-            if(appMap.get("noSql.pool.testWhileIdle") != null ) testWhileIdle = appMap.get("noSql.pool.testWhileIdle").toString();
-            if(appMap.get("noSql.pool.testOnBorrow") != null ) testOnBorrow = appMap.get("noSql.pool.testOnBorrow").toString();
-            if(appMap.get("noSql.pool.testOnReturn") != null ) testOnReturn = appMap.get("noSql.pool.testOnReturn").toString();
-            if(appMap.get("noSql.pool.poolPreparedStatements") != null ) poolPreparedStatements = appMap.get("noSql.pool.poolPreparedStatements").toString();
-            if(appMap.get("noSql.pool.maxPoolPreparedStatementPerConnectionSize") != null ) maxPoolPreparedStatementPerConnectionSize = appMap.get("noSql.pool.maxPoolPreparedStatementPerConnectionSize").toString();
-            if(appMap.get("noSql.pool.validationQuery") != null ) validationQuery = appMap.get("noSql.pool.validationQuery").toString();
-
-            scanPoPackage = appMap.get("noSql.scan.poPackage").toString();
-            log.info("noSql映射实体类包:{}",scanPoPackage);
-
-            if(appMap.get("noSql.select.excludeField") != null)excludeFieldString = appMap.get("noSql.select.excludeField").toString();
-            log.info("不参与查询的字段设置：{}",excludeFieldString);
-
-            if(appMap.get("noSql.printSql") != null)printSql = Boolean.parseBoolean(appMap.get("noSql.printSql").toString());
-            if(printSql)log.info("打印SQl日志");
-            else log.info("不打印SQL日志");
-
-        } catch (IOException e) {
-            log.error("读取yaml文件错误");
-            throw e;
+    public Connection getConnection() throws SQLException {
+        Connection connection;
+        if(ConfigParam.getInstance().isUserDataSourcePool()){
+            try {
+                connection = NoSqlDatasource.getInstance().getDataSource().getConnection();
+            } catch (SQLException e) {
+                log.error("连接池获取数据库连接错误",e);
+                throw e;
+            }
+        }else {
+            try {
+                connection = DriverManager.getConnection(ConfigParam.getInstance().getUrl()
+                        , ConfigParam.getInstance().getUsername()
+                        , ConfigParam.getInstance().getPassword());
+            } catch (SQLException e) {
+                log.error("jdbc获取数据库连接错误",e);
+                throw e;
+            }
         }
-    }
-    /**
-     * 可重写，改变连接池配置项
-     */
-    protected void InitDruidPool() throws Exception {
-        try {
-            //德鲁伊配置
-            Map configMap = new HashMap();
-            configMap.put("driverClassName",driverClassName);
-            configMap.put("url",url);
-            configMap.put("username",username);
-            configMap.put("password",password);
-            configMap.put("initialSize",initialSize);
-            configMap.put("maxActive",maxActive);
-            configMap.put("maxWait",maxWait);
-            configMap.put("timeBetweenEvictionRunsMillis",timeBetweenEvictionRunsMillis);
-            configMap.put("minEvictableIdleTimeMillis",minEvictableIdleTimeMillis);
-            configMap.put("removeAbandoned",removeAbandoned);
-            configMap.put("removeAbandonedTimeout",removeAbandonedTimeout);
-            configMap.put("logAbandoned",logAbandoned);
-            configMap.put("testWhileIdle",testWhileIdle);
-            configMap.put("testOnBorrow",testOnBorrow);
-            configMap.put("testOnReturn",testOnReturn);
-            configMap.put("poolPreparedStatements",poolPreparedStatements);
-            configMap.put("maxPoolPreparedStatementPerConnectionSize",maxPoolPreparedStatementPerConnectionSize);
-            configMap.put("validationQuery",validationQuery);
-            dataSource = DruidDataSourceFactory.createDataSource(configMap);
-            log.info("数据库连接池加载完毕");
-        }  catch (Exception e) {
-            log.error("初始化数据库连接池错误",e);
-            throw e;
-        }
+        return connection;
     }
 
     @Comment("查询单个实体，参数内置")
-    final public <T> T query(T t) throws Exception {
+    final public <T> T query(T t) throws SQLException, IllegalAccessException, InstantiationException, NoSQLException {
         List<T> list = queryList(t);
         if(list == null || list.size() <= 0 )return null;
         else if(list.size() > 1){
-            log.error("需要一个查询结果，但获得两个");
-            throw new Exception();
+            String exceptionContent = "需要一个查询结果，但获得两个";
+            log.error(exceptionContent);
+            throw new NoSQLException(exceptionContent);
         }else {
             return list.get(0);
         }
     }
 
     @Comment("查询单个实体，参数另传")
-    final public <T> T query(Class clz,T t) throws Exception {
+    final public <T> T query(Class clz,T t) throws SQLException, IllegalAccessException, InstantiationException, NoSQLException {
         List<T> list = queryList(clz,t);
         if(list == null || list.size() <= 0 )return null;
         else if(list.size() > 1){
-            log.error("需要一个查询结果，但获得两个");
-            throw new Exception();
+            String exceptionContent = "需要一个查询结果，但获得两个";
+            log.error(exceptionContent);
+            throw new NoSQLException(exceptionContent);
         }else {
             return list.get(0);
         }
     }
 
     @Comment("查询列表，无参数")
-    final public <T> List<T> queryList(Class<T> clt) throws Exception {
+    final public <T> List<T> queryList(Class<T> clt) throws SQLException, InstantiationException, IllegalAccessException {
         try {
             return queryList(clt.newInstance());
-        } catch (Exception e) {
+        } catch (SQLException | InstantiationException | IllegalAccessException e) {
             log.error("查询结果列表失败");
             throw e;
         }
     }
 
     @Comment("查询列表，参数内置")
-    final public <T> List<T> queryList(T tp) throws Exception {
+    final public <T> List<T> queryList(T tp) throws SQLException, IllegalAccessException, InstantiationException {
         Class clz =  tp.getClass();
         return queryList(clz,tp);
     }
 
     @Comment("查询列表，参数另传")
-    final public <T> List<T> queryList(Class clz , T tp) throws Exception {
+    final public <T,P> List<T> queryList(Class clz , P tp) throws IllegalAccessException, SQLException, InstantiationException {
         Field[] fields = tp.getClass().getDeclaredFields();
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         boolean whetherWhere = true;
@@ -230,8 +144,22 @@ public class NoSqlService<T> implements InitializingBean {
         return query(selectSql,params,clz);
     }
 
+
+    /**↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓    单表分页查询，排序内置和排序另传    ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓**/
     @Comment("分页查询，返回总数count和当前页list，参数另传")
-    final public <T,P> Map<String,Object> queryForm(Class<T> clz, P p) throws Exception {
+    final public <T,P> Map<String,Object> queryForm(Class<T> clz, P p) throws IllegalAccessException, SQLException, InstantiationException {
+        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        return queryForm(clz,p,orderBuilder);
+    }
+
+    @Comment("分页查询，返回总数count和当前页list，参数另传,排序另传")
+    final public <T,P> Map<String,Object> queryForm(Class<T> clz, P p,OrderEntity... orders) throws IllegalAccessException, SQLException, InstantiationException, NoSQLException {
+        StringBuilder orderBuilder = new StringBuilder();
+        getOrderContentByOrderEntitys(orderBuilder,orders);
+        return queryForm(clz,p,orderBuilder);
+    }
+
+    private <T,P> Map<String,Object> queryForm(Class<T> clz, P p, StringBuilder orderContent) throws IllegalAccessException, SQLException, InstantiationException {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询数量
@@ -246,8 +174,7 @@ public class NoSqlService<T> implements InitializingBean {
         selectCount.append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
 
-        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderContent,params);
 
         List<T> list = query(selectSql,params,clz);
         Map<String,Object> map = new HashMap<>();
@@ -255,9 +182,15 @@ public class NoSqlService<T> implements InitializingBean {
         map.put("count",count);
         return map;
     }
+    /**↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑    单表分页查询，排序内置和排序另传    ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑**/
 
-    @Comment("分页查询，返回当前页，参数另传")
-    final public <T,P> List<T> queryFormList(Class<T> clz, P p) throws Exception {
+    @Comment("分页查询，返回总数count和当前页list，参数内置")
+    final public <T> Map<String,Object> queryForm(T t) throws SQLException, IllegalAccessException, InstantiationException {
+        return queryForm(t.getClass(),t);
+    }
+
+    /**↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓     查询分页列表入口    ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓**/
+    /*private <T,P> List<T> queryFormList(Class<T> clz, P p,StringBuilder orderContent) throws IllegalAccessException, SQLException, InstantiationException {
         //查询字段
         StringBuilder selectSql = new StringBuilder("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
         //查询条件
@@ -267,23 +200,127 @@ public class NoSqlService<T> implements InitializingBean {
         //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
 
-        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderBuilder,params);
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderContent,params);
+        return query(selectSql,params,clz);
+    }*/
+
+    /**
+     * 分页查询结果，返回实体类列表
+     */
+    private <T,P> List<T> queryFormList(Class<T> clz, P p,StringBuilder orderContent) throws IllegalAccessException, SQLException, InstantiationException {
+        //查询字段
+        StringBuilder selectSql = new StringBuilder();
+        //查询条件
+        List<Object> params = new ArrayList<>();
+        getSelectSqlAndParamsforQueryMFormList(clz,p,selectSql,params,orderContent);
         return query(selectSql,params,clz);
     }
 
-    @Comment("分页查询，返回总数count和当前页list，参数内置")
-    final public <T> Map<String,Object> queryForm(T t) throws Exception {
-        return queryForm(t.getClass(),t);
+    /**
+     * 分页查询结果，返回Map列表
+     */
+    private <T,P> List<Map<String,Object>> queryMapFormList(Class<T> clz, P p,StringBuilder orderContent) throws IllegalAccessException, SQLException, InstantiationException {
+        //查询字段
+        StringBuilder selectSql = new StringBuilder();
+        //查询条件
+        List<Object> params = new ArrayList<>();
+        getSelectSqlAndParamsforQueryMFormList(clz,p,selectSql,params,orderContent);
+        return query(selectSql,params,aliasFieldInitMap.get(clz));
     }
 
+    /**
+     * 分页查询，获取selectSql和params
+     */
+    private <T,P>  void getSelectSqlAndParamsforQueryMFormList(Class<T> clz, P p,StringBuilder selectSql,List<Object> params,StringBuilder orderContent) throws IllegalAccessException {
+        //查询字段
+        selectSql.append("select " + queryInitSqlMap.get(clz)).append("from").append(" ").append(queryTable.get(clz));
+        //查询条件
+        StringBuilder whereSql = new StringBuilder();
+        Map<String,Integer> limitMap = new HashMap<>();
+        //根据 rv 的内容对 whereSql,params,limitMap 三个参数做处理
+        matchingParams(p,whereSql,params,limitMap);
+
+        fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderContent,params);
+    }
+
+    /**↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑     查询分页列表入口    ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑**/
+/*
+    @Comment("分页查询，返回当前页，参数另传，排序另传，key排序字段，order排序方式")
+    final public <T,P> List<T> queryFormList(Class<T> clz, P p, String key, OrderType orderType) throws SQLException, IllegalAccessException, InstantiationException {
+        StringBuilder orderBuilder = new StringBuilder(key).append(" ").append(orderType.getType());
+        return queryFormList(clz,p,orderBuilder);
+    }
+*/
+
+/*
+    @Comment("分页查询，返回当前页，参数另传，排序另传，keys排序字段列表，orders排序方式列表，一一对应")
+    final public <T,P> List<T> queryFormList(Class<T> clz, P p, String[] keys, OrderType[] orderTypes) throws SQLException, IllegalAccessException, InstantiationException, NoSQLException {
+        StringBuilder orderBuilder = new StringBuilder();
+        if(keys.length > 0) {
+            if (keys.length != orderTypes.length) throw new NoSQLException("排序字段列表和排序方式列表长度不一致");
+            for (int i = 0; i < keys.length; i++) {
+                if(i > 0)orderBuilder.append(",");
+                orderBuilder.append(keys[i]).append(" ").append(orderTypes[i].getType());
+            }
+        }
+        return queryFormList(clz,p,orderBuilder);
+    }
+*/
+
+    @Comment("分页查询，返回当前页，参数另传")
+    final public <T,P> List<T> queryFormList(Class<T> clz, P p) throws SQLException, IllegalAccessException, InstantiationException {
+        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        return queryFormList(clz,p,orderBuilder);
+    }
+
+    @Comment("分页查询，返回当前页，参数另传")
+    final public <T,P> List<Map<String,Object>> queryMapFormList(Class<T> clz, P p) throws SQLException, IllegalAccessException, InstantiationException {
+        StringBuilder orderBuilder = new StringBuilder( queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        return queryMapFormList(clz,p,orderBuilder);
+    }
+
+    @Comment("分页查询，返回当前页，参数另传，排序另传")
+    final public <T,P> List<T> queryFormList(Class<T> clz, P p, OrderEntity... orders) throws SQLException, IllegalAccessException, InstantiationException, NoSQLException {
+        StringBuilder orderBuilder = new StringBuilder();
+        getOrderContentByOrderEntitys(orderBuilder,orders);
+        return queryFormList(clz,p,orderBuilder);
+    }
+
+    @Comment("分页查询，返回当前页，参数另传，排序另传")
+    final public <T,P> List<Map<String,Object>> queryMapFormList(Class<T> clz, P p, OrderEntity... orders) throws SQLException, IllegalAccessException, InstantiationException, NoSQLException {
+        StringBuilder orderBuilder = new StringBuilder();
+        getOrderContentByOrderEntitys(orderBuilder,orders);
+        return queryMapFormList(clz,p,orderBuilder);
+    }
+
+    /**
+     * 通过OrderEntity解析排序内容
+     */
+    private void getOrderContentByOrderEntitys(StringBuilder orderBuilder,OrderEntity... orders) throws NoSQLException {
+        for(int i = 0; i < orders.length ; i ++){
+            if(orders[i] == null || StringUtil.isEmpty(orders[i].getKey()) || orders[i].getType() == null){
+                throw new NoSQLException("构建排序类时，排序字段key或排序类型type不可为空");
+            }
+            if(i > 0)orderBuilder.append(",");
+            orderBuilder.append(orders[i].getKey()).append(" ").append(orders[i].getType());
+        }
+    }
+
+
     @Comment("分页查询，返回当前页，参数内置")
-    final public <T> List<T> queryFormList(T t) throws Exception {
+    final public <T> List<T> queryFormList(T t) throws SQLException, IllegalAccessException, InstantiationException {
         return (List<T>) queryFormList(t.getClass(),t);
     }
 
+    @Comment("分页查询，返回当前页，参数内置,排序另传")
+    final public <T> List<T> queryFormList(T t , OrderEntity... orders) throws SQLException, IllegalAccessException, InstantiationException, NoSQLException {
+        return (List<T>) queryFormList(t.getClass(),t,orders);
+    }
+
+
+
     @Comment("分页总数，参数另传")
-    final public <T> Integer queryFormCount(Class<T> clz, BaseForm rv) throws Exception {
+    final public <T> Integer queryFormCount(Class<T> clz, BaseForm rv) throws IllegalAccessException, SQLException {
         //查询数量
         StringBuilder selectCount = new StringBuilder("select count(1) count ").append("from").append(" ").append(queryTable.get(clz));
         //查询条件
@@ -298,15 +335,19 @@ public class NoSqlService<T> implements InitializingBean {
         return queryCount(selectCount,params).get(0);
     }
 
+
+    /**
+     * 获取查询结果总数
+     */
     private List<Integer> queryCount(StringBuilder selectSql,List<Object> params) throws SQLException {
         List<Integer> list = new ArrayList<>();
-        if(printSql)log.info("SQL执行语句为：{}", selectSql);
-        try (Connection connection = dataSource.getConnection();
+        if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行语句为：{}", selectSql);
+        try (Connection connection = getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
                 statment.setObject((i + 1), params.get(i));
             }
-            if(printSql)log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
+            if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
                 while (rs.next()) {
@@ -325,8 +366,25 @@ public class NoSqlService<T> implements InitializingBean {
         return list;
     }
 
+    /** ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓       联表查询，排序内置和另传       ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ **/
     @Comment("联表查询，参数另传")
-    final public <P> List<Map<String,Object>> queryList(Class<?> clz,P p, Carrier... carriers) throws Exception {
+    final public <P> List<Map<String,Object>> queryList(Class<?> clz,P p, Carrier... carriers) throws SQLException, IllegalAccessException {
+        return queryList(clz,p,orderSql -> {},carriers);
+    }
+
+    @Comment("联表查询，参数另传,排序另传")
+    final public <P> List<Map<String,Object>> queryList(Class<?> clz,P p,OrderEntity orders, Carrier... carriers) throws SQLException, IllegalAccessException {
+        return queryList(clz,p,orderSql -> {
+            try {
+                orderSql.setLength(0);  //先清空orderSql
+                getOrderContentByOrderEntitys(orderSql,orders);
+            } catch (NoSQLException e) {
+                e.printStackTrace();
+            }
+        },carriers);
+    }
+
+    final private <P> List<Map<String,Object>> queryList(Class<?> clz, P p,Consumer<StringBuilder> orderConsumer, Carrier... carriers) throws SQLException, IllegalAccessException {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectField = new StringBuilder();
         StringBuilder fromSql = new StringBuilder();
@@ -340,13 +398,36 @@ public class NoSqlService<T> implements InitializingBean {
         //根据 p 的内容对 whereSql,params,limitMap 三个参数做处理
         matchingParams(p,whereSql,params,limitMap);
 
+        //内置排序和另传排序滴哦orderSql处理不同，内置排序这步什么也不做，另传排序这步需要覆盖重写orderSql
+        orderConsumer.accept(orderSql);
+
         fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderSql,params);
 
-        return query(selectSql,params,clz,selectField);
+        //return query(selectSql,params,clz,selectField);
+        return query(selectSql,params,selectField);
+    }
+    /** ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑       联表查询，排序内置和另传       ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ **/
+
+
+    /** ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓       联表分页查询，排序内置和另传       ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ **/
+    @Comment("联表分页查询，参数另传")
+    final public <P> Map<String,Object> queryForm(Class<?> clz,P p, Carrier... carriers) throws IllegalAccessException, SQLException {
+        return queryForm(clz,p,orderSql -> {},carriers);
     }
 
-    @Comment("联表分页查询，参数另传")
-    final public <P> Map<String,Object> queryForm(Class<?> clz,P p, Carrier... carriers) throws Exception {
+    @Comment("联表分页查询，参数另传，排序另传")
+    final public <P> Map<String,Object> queryForm(Class<?> clz,P p,OrderEntity orders, Carrier... carriers) throws IllegalAccessException, SQLException {
+        return queryForm(clz,p,orderSql -> {
+            try {
+                orderSql.setLength(0);  //先清空orderSql
+                getOrderContentByOrderEntitys(orderSql,orders);
+            } catch (NoSQLException e) {
+                e.printStackTrace();
+            }
+        },carriers);
+    }
+
+    private <P> Map<String,Object> queryForm(Class<?> clz,P p,Consumer<StringBuilder> orderConsumer, Carrier... carriers) throws IllegalAccessException, SQLException {
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectCount = new StringBuilder("select count(1) count ");
 
@@ -365,14 +446,21 @@ public class NoSqlService<T> implements InitializingBean {
         selectCount.append(" ").append(fromSql).append(" ").append(whereSql);
         Integer count = queryCount(selectCount,params).get(0);
 
+        //内置排序和另传排序滴哦orderSql处理不同，内置排序这步什么也不做，另传排序这步需要覆盖重写orderSql
+        orderConsumer.accept(orderSql);
+
         fitSelectSqlOrderByAndLimit(selectSql,whereSql,limitMap,orderSql,params);
 
-        List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
+        //List<Map<String,Object>> list = query(selectSql,params,clz,selectField);
+        List<Map<String,Object>> list = query(selectSql,params,selectField);
         Map<String,Object> map = new HashMap<>();
         map.put("list",list);
         map.put("count",count);
         return map;
     }
+
+    /** ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑       联表分页查询，排序内置和另传       ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ **/
+
 
     private <P> void fitFieldAndFrom(StringBuilder selectSql,StringBuilder selectField,StringBuilder fromSql,StringBuilder orderSql,List<Object> params, Class<?> clz,P p, Carrier[] carriers ) throws IllegalAccessException {
         fitFieldAndFrom(selectSql,selectField,fromSql,new StringBuilder(),orderSql,params,clz,p,carriers);
@@ -385,7 +473,7 @@ public class NoSqlService<T> implements InitializingBean {
         fromSql.append("from").append(" ").append(queryTable.get(clz));
         selectField.append(aliasFieldInitMap.get(clz));
         //StringBuilder orderBuilder = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
-        orderSql = new StringBuilder(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
+        orderSql.append(  queryInitOrderMap.get(clz) == null?"": queryInitOrderMap.get(clz) );
         for(int i = 0;i < carriers.length; i++){
             selectSqlField.append(",").append(queryInitAliasSqlMap.get( carriers[i].getRightTable() ));
             selectField.append(",").append(aliasFieldInitMap.get( carriers[i].getRightTable() ));
@@ -502,7 +590,7 @@ public class NoSqlService<T> implements InitializingBean {
      * 仅限两表left join的简便使用方式
      */
     @Comment("两表联表查询，快捷方法，参数内置")
-    final public <T,E> List<Map<String,Object>> queryTwoLeftJoinList(T t,E e,String leftKey,String rightKey) throws Exception {
+    final public <T,E> List<Map<String,Object>> queryTwoLeftJoinList(T t,E e,String leftKey,String rightKey) throws IllegalAccessException, SQLException {
         StringBuilder selectSql = new StringBuilder("select ");
         Class clt = t.getClass() , cle = e.getClass();
         StringBuilder selectSqlField = new StringBuilder();
@@ -524,7 +612,7 @@ public class NoSqlService<T> implements InitializingBean {
     }
 
     @Comment("两表联表查询总数，快捷方法，参数内置")
-    final public <T,E> Integer queryTwoLeftJoinCount(T t,E e,String leftKey,String rightKey) throws Exception {
+    final public <T,E> Integer queryTwoLeftJoinCount(T t,E e,String leftKey,String rightKey) throws IllegalAccessException, SQLException {
         StringBuilder selectCount = new StringBuilder("select count(1) count ");
         Class clt = t.getClass() , cle = e.getClass();
         StringBuilder fromSql = new StringBuilder();
@@ -541,7 +629,7 @@ public class NoSqlService<T> implements InitializingBean {
     }
 
     @Comment("两表联表分页查询，快捷方法，参数内置")
-    final public <T,E> Map<String,Object> queryTwoLeftJoinForm(T t,E e,String leftKey,String rightKey,Integer page_num,Integer page_size) throws Exception {
+    final public <T,E> Map<String,Object> queryTwoLeftJoinForm(T t,E e,String leftKey,String rightKey,Integer page_num,Integer page_size) throws IllegalAccessException, SQLException {
         Map<String,Object> result = new HashMap<>();
         StringBuilder selectSql = new StringBuilder("select ");
         StringBuilder selectCount = new StringBuilder("select count(1) count ");
@@ -607,26 +695,26 @@ public class NoSqlService<T> implements InitializingBean {
     /*************************************************** 两表 left join 结束 ******************************************************/
 
 
-    private <E> List<E> query(StringBuilder selectSql,List<Object> params,Class<E> returnPoClz) throws  Exception {
+    private <E> List<E> query(StringBuilder selectSql,List<Object> params,Class<E> returnPoClz) throws SQLException, InstantiationException, IllegalAccessException {
         List<E> list = new ArrayList<>();
-        if(printSql)log.info("SQL执行语句为：{}", selectSql);
-        try (Connection connection = dataSource.getConnection();
+        if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行语句为：{}", selectSql);
+        try (Connection connection = getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
                 statment.setObject((i + 1), params.get(i));
             }
-            if(printSql)log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
+            if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
                 while (rs.next()) {
                     E t = packageEntity(rs,returnPoClz);
                     list.add(t);
                 }
-            }catch (SQLException e ){
+            }catch (SQLException | InstantiationException | IllegalAccessException e ){
                 log.error("解析查询结果出错");
                 throw e;
             }
-        } catch (SQLException e) {
+        } catch (SQLException | InstantiationException | IllegalAccessException e) {
             log.error( "执行sql出错：{}",selectSql );
             throw e;
         }
@@ -634,16 +722,17 @@ public class NoSqlService<T> implements InitializingBean {
         log.info("获得查询结果数量:{}",list.size());
         return list;
     }
+/*
 
-    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<Object> params,Class<E> returnPoClz,StringBuilder selectField) throws  Exception {
+    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<Object> params,Class<E> returnPoClz,StringBuilder selectField) throws SQLException {
         List<Map<String,Object>> list = new ArrayList<>();
-        if(printSql)log.info("SQL执行语句为：{}", selectSql);
-        try (Connection connection = dataSource.getConnection();
+        if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行语句为：{}", selectSql);
+        try (Connection connection = getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
                 statment.setObject((i + 1), params.get(i));
             }
-            if(printSql)log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
+            if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行参数为：{}", String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             String[] selectFieldArgs = selectField.toString().replaceAll(" +","").split(",");
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
@@ -665,15 +754,16 @@ public class NoSqlService<T> implements InitializingBean {
         log.info("获得查询结果数量:{}",list.size());
         return list;
     }
+*/
 
-    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<Object> params,StringBuilder selectField) throws  Exception {
+    private <E> List<Map<String,Object>> query(StringBuilder selectSql,List<Object> params,StringBuilder selectField) throws SQLException {
         List<Map<String,Object>> list = new ArrayList<>();
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = getConnection();
              PreparedStatement statment = connection.prepareStatement(selectSql.toString());){
             for (int i = 0; i < params.size(); i++) {
                 statment.setObject((i + 1), params.get(i));
             }
-            if(printSql)log.info("SQL执行语句为:{} 执行参数为:{}", selectSql,String.join(",",params.stream().map(Object::toString).collect(Collectors.toList())));
+            if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行语句为:{} 执行参数为:{}", selectSql,String.join(",",params.stream().map(Object::toString).collect(Collectors.toList())));
             String[] selectFieldArgs = selectField.toString().replaceAll(" +","").replaceAll("`","").split(",");
             try(ResultSet rs = statment.executeQuery()){
                 if(rs == null)return null;
@@ -780,7 +870,7 @@ public class NoSqlService<T> implements InitializingBean {
         insertSql.append( String.join(",",sqlField) ).append(")VALUES(").append( String.join(",",params.stream().map(s -> "?").collect(Collectors.toList() ) )).append(")");
 
         log.info("SQL执行语句为：{}", insertSql);
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = getConnection();
              PreparedStatement statment = connection.prepareStatement(insertSql.toString());){
             for (int i = 0; i < params.size(); i++) {
                 statment.setObject((i + 1), params.get(i));
@@ -800,7 +890,7 @@ public class NoSqlService<T> implements InitializingBean {
      * @param t
      */
     @Comment("更新数据，更新条件为主键@PrimaryKey")
-    final public <T> Integer update(T t) throws Exception {
+    final public <T> Integer update(T t) throws IllegalAccessException, NoSQLException, SQLException {
         Class<?> clz = t.getClass();
         Field[] fields = clz.getDeclaredFields();
         String tableName = clz.getAnnotation(TableName.class).value();
@@ -834,7 +924,7 @@ public class NoSqlService<T> implements InitializingBean {
             whetherComma = true;
         }
         boolean whetherWhere = true;
-        if(sqlField.size() <= 0)throw new Exception("主键未找到");
+        if(sqlField.size() <= 0)throw new NoSQLException("主键未找到");
         for(int i = 0; i < primaryKeys.size(); i ++){
             updateSql.append(" ");
             if(whetherWhere)updateSql.append("where ");
@@ -856,7 +946,7 @@ public class NoSqlService<T> implements InitializingBean {
      * @param t
      */
     @Comment("删除数据，仅适删除条件为主键@PrimaryKey（可以为联合主键）")
-    final public <T> Integer delete(T t) throws Exception {
+    final public <T> Integer delete(T t) throws NoSQLException, SQLException, IllegalAccessException {
         return delete(t , field -> field.isAnnotationPresent(PrimaryKey.class) );
     }
 
@@ -864,7 +954,7 @@ public class NoSqlService<T> implements InitializingBean {
      * 删除，可大量删除，谨慎使用
      */
     @Comment("删除数据，可大量删除，条件为内置参数")
-    final public <T> Integer deleteByField(T t) throws Exception {
+    final public <T> Integer deleteByField(T t) throws NoSQLException, SQLException, IllegalAccessException {
         return delete(t , field -> {
             try {
                 field.setAccessible(true);
@@ -876,7 +966,7 @@ public class NoSqlService<T> implements InitializingBean {
         });
     }
 
-    private <T> Integer delete(T t, Predicate<Field> predicate) throws Exception {
+    private <T> Integer delete(T t, Predicate<Field> predicate) throws NoSQLException, IllegalAccessException, SQLException {
         String tableName = t.getClass().getAnnotation(TableName.class).value();
         Field[] fields = t.getClass().getDeclaredFields();
         List<String> sqlField = new ArrayList<>();
@@ -898,7 +988,7 @@ public class NoSqlService<T> implements InitializingBean {
         }
         StringBuilder sql = new StringBuilder("delete from ").append(tableName);
         boolean whetherWhere = true;
-        if(sqlField.size() <= 0)throw new Exception("主键未找到");
+        if(sqlField.size() <= 0)throw new NoSQLException("主键未找到");
         for(int i = 0 ; i < sqlField.size(); i ++){
             sql.append(" ");
             if(whetherWhere)sql.append("where ");
@@ -937,13 +1027,13 @@ public class NoSqlService<T> implements InitializingBean {
 
     private Integer updateAndDelete(StringBuilder sql,List<Object> params) throws SQLException {
         //getPreparedStatment(sql,params).executeUpdate();
-        if(printSql)log.info("SQL执行语句为：{}", sql);
-        try (Connection connection = dataSource.getConnection();
+        if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行语句为：{}", sql);
+        try (Connection connection = getConnection();
              PreparedStatement statment = connection.prepareStatement(sql.toString());){
             for (int i = 0; i < params.size(); i++) {
                 statment.setObject((i + 1), params.get(i));
             }
-            if(printSql)log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
+            if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行参数为：{}",  String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
             Integer result = statment.executeUpdate();
             log.info("SQL执行结果影响条数：{}", result);
             return result;
@@ -951,12 +1041,12 @@ public class NoSqlService<T> implements InitializingBean {
     }
 
     private PreparedStatement getPreparedStatment(StringBuilder sql,List<Object> params) throws SQLException {
-        if(printSql)log.info("SQL执行语句为：{}", sql);
-        PreparedStatement  statment = dataSource.getConnection().prepareStatement(sql.toString());
+        if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行语句为：{}", sql);
+        PreparedStatement  statment = getConnection().prepareStatement(sql.toString());
         for(int i = 0;i < params.size(); i++){
             statment.setObject((i+1),params.get(i));
         }
-        if(printSql)log.info("SQL执行参数为：{}",String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
+        if(ConfigParam.getInstance().isPrintSql())log.info("SQL执行参数为：{}",String.join(",", params.stream().map(Object::toString).collect(Collectors.toList())));
         return statment;
     }
 
@@ -1003,22 +1093,44 @@ public class NoSqlService<T> implements InitializingBean {
         return  field.get(t).toString();
     }
 
-    @Override
-    final public void afterPropertiesSet() throws Exception {
-        //先初始化数据库连接的用户名密码和url
-        initConfigInfo();
-        //在初始化德鲁伊连接池
-        InitDruidPool();
+    @Comment("初始化配置文件的信息")
+    public void initConfigInfo() throws IOException {
+        ConfigParam.getInstance().initConfigInfo();
+    }
+
+    @Comment("初始化连接信息")
+    public void initConnectInfo() throws Exception {
+        //再初始化德鲁伊连接池
+        ConfigParam.getInstance().InitDruidPoolInfo();
+        //初始化连接池
+        NoSqlDatasource.getInstance().InitDruidPoolInfo();
+    }
+
+    @Comment("初始化执行信息，赋值非查询字段excludeField、数据表映射目录poPackageSource")
+    public void initExecuteInfo(){
         //配置非查询字段
-        if(!StringUtil.isEmpty(excludeFieldString))excludeField = new HashSet<>(Arrays.asList(excludeFieldString.split(",")));
-        log.info("非查询字段有{}个，分别是:{}",excludeField.size(),excludeFieldString);
+        if(!StringUtil.isEmpty(ConfigParam.getInstance().getExcludeFieldString()))excludeField = new HashSet<>(Arrays.asList(ConfigParam.getInstance().getExcludeFieldString().split(",")));
+        log.info("非查询字段有{}个，分别是:{}",excludeField.size(),excludeField);
         //初始化查询sql语句
-        if(StringUtil.isEmpty(scanPoPackage)){
+        if(StringUtil.isEmpty(ConfigParam.getInstance().getScanPoPackage())){
             log.error("未扫描到数据表映射类");
             System.exit(0);
+        }else{
+            poPackageSource = ConfigParam.getInstance().getScanPoPackage();
         }
+    }
+
+    @Override
+    final public void afterPropertiesSet() throws Exception {
+        //先初始化配置文件的信息
+        this.initConfigInfo();
+        //初始化连接信息
+        this.initConnectInfo();
+        //初始化执行信息
+        this.initExecuteInfo();
+
         Set<Class<?>> classes = new LinkedHashSet<>();
-        for(String packagePath : scanPoPackage.split(",")) {
+        for(String packagePath : poPackageSource.split(",")) {
             classes.addAll(ClassFunction.getClasses(packagePath));
         }
         log.info("扫描的sql映射类共{}个",classes.size());

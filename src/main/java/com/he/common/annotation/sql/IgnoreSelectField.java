@@ -1,6 +1,6 @@
 package com.he.common.annotation.sql;
 
-import com.he.common.comment.Comment;
+import com.he.common.annotation.comment.Comment;
 
 import java.lang.annotation.*;
 

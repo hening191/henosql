@@ -1,4 +1,4 @@
-package com.he.common.comment;
+package com.he.common.annotation.comment;
 
 import java.lang.annotation.*;
 

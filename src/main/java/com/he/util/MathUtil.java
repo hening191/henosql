@@ -102,4 +102,5 @@ public class MathUtil {
 		//1代表小数点后面的位数, 不足补0。 f代表数据是浮点类型。保留2位小数就是“%.2f”，依此累推。
 		return result;
 	}
+
 }
